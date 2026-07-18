@@ -1,70 +1,98 @@
-# Getting Started with Create React App
+# Bufalotek Center
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Bilişim Topluluğu için toplantı log tutma ve takip web sitesi.
+React + Firebase (Firestore + Authentication) tabanlı, rol-bazlı yetkilendirme sistemi ile.
 
-## Available Scripts
+GitHub Pages üzerinden otomatik dağıtım yapılır — `main` dalına her push yaptığında GitHub Actions projeyi derleyip GitHub Pages'te yayımlar.
 
-In the project directory, you can run:
+## Özellikler
 
-### `npm start`
+- **Rol Bazlı Yetki**: Admin (tam yetki) ve User (sadece okuma). Admin, kullanıcılara "bugün sen log tutabilirsin" izni verebilir.
+- **Toplantı Logları**: Her toplantı 3 kategoride kaydedilir — Gündem, Alınan Kararlar, Görevler.
+- **Yoklama Sistemi**: Toplantıya gelen üyeleri "Geldi/Gelmedi" olarak işaretleme, yeşil/kırmızı görsel geri bildirim.
+- **Gri Liste**: Son 3 toplantıya üst üste katılmayan üyeler otomatik gri listeye alınır.
+- **Koyu Tema**: Modern, bilişim topluluğuna uygun koyu tema (neon mavi/mor).
+- **Takvim Görünümü**: Toplantılar aylık takvim formatında.
+- **Firebase Entegrasyonu**: Birden çok kullanıcı aynı anda log tutabilir.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## GitHub Secrets (Zorunlu)
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Repository'yi oluşturduktan sonra **Settings → Secrets and variables → Actions → New repository secret** ile şu 6 secret'i ekleyin:
 
-### `npm test`
+| Secret Adı | Değer |
+|------------|-------|
+| `FIREBASE_API_KEY` | Firebase Console > Project Settings > API Key |
+| `FIREBASE_AUTH_DOMAIN` | `proje-id.firebaseapp.com` |
+| `FIREBASE_PROJECT_ID` | Firebase proje ID |
+| `FIREBASE_STORAGE_BUCKET` | `proje-id.appspot.com` |
+| `FIREBASE_MESSAGING_SENDER_ID` | Sender ID (Firebase Console > Project Settings) |
+| `FIREBASE_APP_ID` | App ID (Firebase Console > Project Settings > Your apps) |
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## İlk Kurulum
 
-### `npm run build`
+### 1. Firebase Console Üzerinde
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+1. [Firebase Console](https://console.firebase.google.com)'da yeni bir proje oluştur.
+2. **Authentication** sekmesinden **Email/Password** sağlayıcısını etkinleştir.
+3. **Firestore Database**'i başlat (production ya da test mode'da fark etmez, kendi rules'umuzu yazacağız).
+4. **Project Settings → Your apps → Web App** ekleyip SDK config'i al (npm seçeneği).
+5. Yukarıdaki GitHub Secrets'a bu değerleri gir.
+6. **Firestore Database → Rules** sekmesine git, `firestore.rules` dosyasının içeriğini yapıştır, **Publish** et.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### 2. İlk Admin Kullanıcı
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+1. Yayına aldıktan sonra siteye git, kayıt ol (istediğin e-posta/şifre).
+2. **Firebase Console → Firestore Database → users** koleksiyonuna gir.
+3. Senin kullanıcının dokümanına `role` alanı ekle, değer olarak `"admin"` yaz.
+4. Siteden çıkış yapıp tekrar giriş yap → "Admin Paneli" sekmesi görünür.
 
-### `npm run eject`
+Alternatif olarak **Authentication → Kullanıcı → Custom claims** kısmına `{"role": "admin"}` de ekleyebilirsin (Cloud Functions gerektirir).
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Local Geliştirme
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```bash
+# 1. .env dosyasını oluştur (değerleri Firebase Console'dan al)
+cp .env.example .env
+# .env içine kendi Firebase değerlerini gir
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+# 2. Bağımlılıkları yükle
+npm install
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+# 3. Geliştirme sunucusunu başlat
+npm start
+```
 
-## Learn More
+PowerShell'de script çalıştırma politikası engelliyorsa `cmd /c "npm install"` şeklinde çalıştır.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## Dağıtım
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Otomatik dağıtım GitHub Actions ile yapılır. `main` (veya `master`) dalına push yapman yeterli — gerisini workflow halleder.
 
-### Code Splitting
+Repository ayarlarında: **Settings → Pages → Build and deployment → Source: GitHub Actions** seçili olmalıdır.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## Klasör Yapısı
 
-### Analyzing the Bundle Size
+```
+bufalotek-center/
+├── public/                # Statik dosyalar
+├── src/
+│   ├── firebaseConfig.js   # Firebase SDK yapılandırması (env değişkenleri)
+│   ├── firestoreService.js # Firestore CRUD + Auth + Permissions
+│   ├── authContext.js      # React context ile auth durumu
+│   ├── storageService.js   # Eski localStorage servisi (referans için)
+│   ├── App.js              # Ana uygulama bileşeni
+│   └── index.css           # Standart CSS (koyu tema)
+├── .github/workflows/
+│   └── deploy.yml          # GitHub Actions workflow
+├── firestore.rules         # Firestore güvenlik kuralları
+├── .env.example            # Örnek env dosyası
+└── package.json
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## Güvenlik Notları
 
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- `.env` dosyası `.gitignore`'a eklenmiştir, **asla repository'e pushlamayın**.
+- `firestore.rules` kuralları:
+  - Sadece giriş yapmış kullanıcılar okuyabilir.
+  - Sadece admin'ler silebilir veya rol atayabilir.
+  - Admin'in izin verdiği kullanıcılar sadece o gün için yazma yapabilir.
