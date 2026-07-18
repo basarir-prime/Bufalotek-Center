@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './authContext';
 import * as fs from './firestoreService';
-import * as local from './storageService';
 
 // Bugünü YYYY-MM-DD formatında al
 const getTodayISO = () => {
@@ -9,7 +8,7 @@ const getTodayISO = () => {
 };
 
 function App() {
-  const { user, role, loading, isAdmin, authError } = useAuth();
+  const { user, role, loading, isAdmin } = useAuth();
 
   const [members, setMembers] = useState([]);
   const [meetings, setMeetings] = useState([]);
