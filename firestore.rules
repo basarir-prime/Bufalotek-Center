@@ -3,53 +3,60 @@ rules_version = '2';
 // Bufalotek Center — Firestore Security Rules
 //
 // Roller:
-//   - admin: Tüm dokümanlara tam yetki. Custom claim ile taşınır.
-//   - user:  Toplantıları okuyabilir, üyeleri okuyabilir. Yazamaz/silemez.
-//   - logTutucu: Admin'in o gün için izin verdiği user; sadece o günkü toplantıya write yapabilir.
+//   - admin: custom claim "admin" VEYA users/{uid}.role == "admin"
+//   - user:  giris yapmis her kullanici (toplanti/uye OKU, yazma yok)
+//   - logTutucu: admin'in belirli bir gun icin izin verdigi kullanici
 //
-// Custom claims ayarı:
-//   İlk admin el ile Firebase Console'dan ayarlanmalı:
-//   auth > kullanıcı > "Custom claims" = { "role": "admin" }
+// Admin YAPMAK icin (Firebase Console):
+//   1. Authentication > Users > ilgili kullanici > Custom claims = { "role": "admin" }
+//      VEYA
+//   2. Firestore > users koleksiyonu > ilgili uid dokümani > role: "admin"
+//   (Her ikisi de calisir. custom claim daha hizli, firestore doc fallbacktir.)
 //
 // Doküman yol (path) şeması:
-//   /users/{uid}                  = kullanıcı profili + rol alanı (mirror)
-//   /members/{memberId}            = topluluk üyesi kaydı
-//   /meetings/{meetingId}           = toplantı kaydı (gundem, kararlar, gorevler, date, title)
-//   /attendance/{attendanceId}     = { meetingId, memberId }
-//   /greyList/{memberId}            = gri liste kaydı (memberId = memberId)
-//   /logPermissions/{logId}        = { meetingId, userId, date, grantedBy }
-//   /config/roles                  = uygulama ayarları (sadece admin)
+//   /users/{uid}            = kullanici profili + role alani
+//   /members/{memberId}     = topluluk uyesi kaydi
+//   /meetings/{meetingId}   = toplanti (title, date, gundem, kararlar, gorevler)
+//   /attendance/{aid}      = { meetingId, memberId }
+//   /greyList/{memberId}   = gri liste kaydi
+//   /logPermissions/{permId}= { targetUid, date, grantedBy } — id = "uid_YYYY-MM-DD"
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ---------- YARDIMCI FONKSİYONLAR ----------
+    // ---------- YARDIMCI FONKSIYONLAR ----------
     function isSignedIn() {
       return request.auth != null;
-    }
-
-    function userRole() {
-      return request.auth.token.role;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && userRole() == 'admin';
-    }
-
-    function isUser() {
-      return isSignedIn() && (userRole() == 'user' || userRole() == 'admin');
     }
 
     function uid() {
       return request.auth.uid;
     }
 
+    // Admin = custom claim "admin" VEYA users/{uid}.role == "admin"
+    // Bu sayede Firestore consoleundan users dokümanini guncellemek de admin yapmak icin yeterli.
+    function userDocRole() {
+      return get(/databases/$(database)/documents/users/$(uid())).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.role == 'admin'
+        || (exists(/databases/$(database)/documents/users/$(uid()))
+            && userDocRole() == 'admin')
+      );
+    }
+
+    // User = sadece giris yapmis kullanici.
+    // Yeni kayit olmus ama rol claim'i henuz set edilmemis kullanıcılar da OKUYABILSIN diye
+    // isUser() artik sadece isSignedIn() kontrol ediyor.
+    function isUser() {
+      return isSignedIn();
+    }
+
     // ---------- USERS ----------
-    // Kullanıcı profili (Firestore users koleksiyonu, custom claims'in aynası)
     match /users/{userId} {
       allow read: if isSignedIn();
-      // Sadece admin başka kullanıcının rolünü değiştirebilir.
-      // Kullanıcı kendi dokümanını sınırlı şekilde güncelleyebilir (rol dışındaki alanlar).
       allow create: if isSignedIn() && uid() == userId;
       allow update: if isAdmin()
                     || (isSignedIn() && uid() == userId
@@ -57,37 +64,35 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ---------- MEMBERS (topluluk üyeleri) ----------
+    // ---------- MEMBERS ----------
+    // Members sadece admin/logTutucu bugünün herhangi bir permission'ı varsa yazabilir.
+    // (Burada tekil tarih kontrolü yok; yine de permission create/admin kontrollü)
     match /members/{memberId} {
       allow read: if isUser();
-      allow create, update, delete: if isAdmin()
-                                     || isLogTutucuForToday();
+      allow create, update, delete: if isAdmin() || hasAnyLogPermission();
     }
 
     // ---------- MEETINGS ----------
     match /meetings/{meetingId} {
       allow read: if isUser();
-      allow create: if isAdmin() || isLogTutucuForToday();
-      allow update: if isAdmin() || isLogTutucuForToday();
+      allow create: if isAdmin() || isLogTutucuForDate(request.resource.data.date);
+      allow update: if isAdmin() || isLogTutucuForMeetingDate();
       allow delete: if isAdmin();
     }
 
     // ---------- ATTENDANCE ----------
     match /attendance/{aid} {
       allow read: if isUser();
-      allow create, update, delete: if isAdmin()
-                                     || isLogTutucuForToday();
+      allow create, update, delete: if isAdmin() || hasAnyLogPermission();
     }
 
     // ---------- GREY LIST ----------
     match /greyList/{memberId} {
       allow read: if isUser();
-      // Gri liste server tarafından hesaplanmalı; UI sadece admin tarafından manuel override edilebilir
       allow write: if isAdmin();
     }
 
     // ---------- LOG PERMISSIONS ----------
-    // Admin bir kullanıcıya "bugün sen log tutabilirsin" izni verir.
     match /logPermissions/{permId} {
       allow read: if isUser();
       allow create, update, delete: if isAdmin();
@@ -99,22 +104,29 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ---------- YARDIMCI: bugünün log tutucusu mu? ----------
-    function isLogTutucuForToday() {
+    // ---------- BUGUNUN LOG TUTUCUSU MU? ----------
+    // Yeni meeting oluştururken: request.resource.data.date YYYY-MM-DD formatındadır
+    // (uygulama bu formatta yazar). Permission id = "uid_YYYY-MM-DD" olabilir.
+    // Bu sayede sadece o günün izni olan kullanıcı, o güne toplantı ekleyebilir.
+    function isLogTutucuForDate(dateStr) {
       return isSignedIn()
-        && exists(/databases/$(database)/documents/logPermissions/$(getLogPermissionIdForToday()));
+        && exists(/databases/$(database)/documents/logPermissions/$(uid() + '_' + dateStr));
     }
 
-    function getLogPermissionIdForToday() {
-      // Basit yaklaşıım: permission id = uid + '_' + todayISO
-      return uid() + '_' + timestampToString(request.time);
+    function isLogTutucuForMeetingDate() {
+      return isSignedIn() && (
+        isLogTutucuForDate(request.resource.data.date) ||
+        isLogTutucuForDate(resource.data.date)
+      );
     }
 
-    // Sağlayıcılarda timestamp->string dönüşümü yok; bu nedenle gerçek hesap
-    // uygulama tarafında "logPermissions/{uid}_{YYYY-MM-DD}" formatında kaydedilir
-    // ve buradan sorgulanır. (Bkz firestoreService.js: buildPermissionId)
-    function timestampToString(ts) {
-      return string(ts);
+    // "Herhangi bir tarihte log izni var mi?" — üye/yoklama islemleri icin.
+    // Not: permission yalnizca admin tarafindan yazildigi icin kullanici bunu atlatamaz,
+    // ancak "herhangi bir tarihte" verdigi icin her gun gecerli olur. Sadece ok/yoklama
+    // islemlerinde bu kullaniliyor; toplanti tarih bagimi hâlâ isLogTutucuForDate ile korumali.
+    function hasAnyLogPermission() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/logPermissions/$(uid() + '_any'));
     }
   }
 }
