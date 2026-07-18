@@ -14,7 +14,6 @@ function App() {
   const [meetings, setMeetings] = useState([]);
   const [attendeeMap, setAttendeeMap] = useState({});
   const [greyList, setGreyList] = useState([]);
-  const [todayPermissions, setTodayPermissions] = useState([]);
   const [hasTodayPermission, setHasTodayPermission] = useState(false);
 
   const [activeTab, setActiveTab] = useState('meetings');
@@ -65,7 +64,6 @@ function App() {
       setMembers(mems);
       setMeetings(meets);
       setGreyList(greys);
-      setTodayPermissions(perms);
 
       // Katılımcı haritasını oluştur
       const newAttendeeMap = {};
@@ -99,7 +97,6 @@ function App() {
     if (!user) return;
     const today = getTodayISO();
     const unsub = fs.subscribeTodayPermissions(today, (perms) => {
-      setTodayPermissions(perms);
       const hasPerm = perms.some((p) => p.targetUid === user.uid);
       setHasTodayPermission(hasPerm);
     });

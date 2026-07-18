@@ -17,7 +17,6 @@ import {
  * Bu sadece demo/test amaçlıdır.
  * ========================================================= */
 
-const offlineKey = (name, id) => (id ? `local_${name}_${id}` : `local_${name}`);
 
 /* =========================================================
  * YETKI / LOG IZNI
