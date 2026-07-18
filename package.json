@@ -1,7 +1,6 @@
 {
   "name": "bufalotek-center",
   "version": "0.1.0",
-  "homepage": "https://bufalotek.github.io/bufalotek-center",
   "private": true,
   "dependencies": {
     "@testing-library/dom": "^10.4.1",
