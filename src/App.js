@@ -78,15 +78,26 @@ function App() {
     setLoadingData(true);
     setGlobalError('');
     try {
-      const [mems, meets, atts, greys, perms] = await Promise.all([
+      const [mems, meets, atts, greys, perms, usersSnap] = await Promise.all([
         fs.getMembersFS(),
         fs.getMeetingsFS(),
         fs.getAttendanceFS(),
         fs.getGreyListFS(),
         fs.getLogPermissionsForDate(getTodayISO()),
+        fs.getUsersFS(),
       ]);
 
-      setMembers(mems);
+      // Eksik kullanıcıları members'a otomatik ekle
+      const memberUidSet = new Set(mems.map((m) => String(m.id)));
+      for (const u of usersSnap) {
+        if (!memberUidSet.has(String(u.id))) {
+          await fs.addMemberFS({ name: u.name || 'İsimsiz', email: u.email }, u.id);
+        }
+      }
+
+      // Güncel members listesini tekrar çek
+      const updatedMems = await fs.getMembersFS();
+      setMembers(updatedMems);
       setMeetings(meets);
       setGreyList(greys);
 
@@ -95,7 +106,7 @@ function App() {
       meets.forEach((meeting) => {
         const meetingAtts = atts.filter((a) => a.meetingId === meeting.id || String(a.meetingId) === String(meeting.id));
         const attIds = new Set(meetingAtts.map((a) => a.memberId));
-        newAttendeeMap[meeting.id] = mems.filter((m) => attIds.has(m.id) || attIds.has(String(m.id)));
+        newAttendeeMap[meeting.id] = updatedMems.filter((m) => attIds.has(m.id) || attIds.has(String(m.id)));
       });
       setAttendeeMap(newAttendeeMap);
 

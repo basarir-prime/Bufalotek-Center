@@ -61,14 +61,21 @@ export const getMembersFS = async () => {
   return s.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-export const addMemberFS = async (member) => {
-  const ref = await addDoc(collection(db, 'members'), {
+export const addMemberFS = async (member, uid = null) => {
+  const docId = uid ? String(uid) : undefined;
+  const data = {
     name: member.name.trim(),
     email: member.email.trim().toLowerCase(),
     isActive: true,
     createdAt: serverTimestamp(),
-  });
-  return { id: ref.id, name: member.name.trim(), email: member.email.trim().toLowerCase(), isActive: true };
+  };
+  if (docId) {
+    await setDoc(doc(db, 'members', docId), data);
+    return { id: docId, ...data };
+  } else {
+    const ref = await addDoc(collection(db, 'members'), data);
+    return { id: ref.id, ...data };
+  }
 };
 
 export const updateMemberFS = async (id, updates) => {
