@@ -14,17 +14,14 @@ function App() {
   const [meetings, setMeetings] = useState([]);
   const [attendeeMap, setAttendeeMap] = useState({});
   const [greyList, setGreyList] = useState([]);
+  const [notifs, setNotifs] = useState([]);
   const [hasTodayPermission, setHasTodayPermission] = useState(false);
 
   const [activeTab, setActiveTab] = useState('meetings');
   const [loadingData, setLoadingData] = useState(true);
   const [globalError, setGlobalError] = useState('');
 
-  // Form State'leri
-  const [memberForm, setMemberForm] = useState({ name: '', email: '' });
-  const [editingMember, setEditingMember] = useState(null);
-  const [memberError, setMemberError] = useState('');
-
+  // Toplantı Form State'leri
   const [meetingForm, setMeetingForm] = useState({ title: '', date: getTodayISO(), gundem: '', kararlar: '', gorevler: '' });
   const [editingMeeting, setEditingMeeting] = useState(null);
   const [meetingError, setMeetingError] = useState('');
@@ -34,7 +31,6 @@ function App() {
   const [attendanceForm, setAttendanceForm] = useState([]);
 
   const [search, setSearch] = useState('');
-  const [showInactive, setShowInactive] = useState(true);
 
   // Admin Paneli State'leri
   const [usersList, setUsersList] = useState([]);
@@ -46,7 +42,36 @@ function App() {
   const [busy, setBusy] = useState(false);
 
   /* =========================================================
-   * VERI YUKLEME
+   * BİLDİRİM OKUMA / YAZMA
+   * ========================================================= */
+  const refreshNotifs = useCallback(() => {
+    if (user) {
+      setNotifs(fs.getNotifs(user.uid));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshNotifs();
+    const interval = setInterval(refreshNotifs, 10000);
+    return () => clearInterval(interval);
+  }, [refreshNotifs]);
+
+  const handleMarkNotifRead = (id) => {
+    if (user) {
+      fs.markNotifRead(user.uid, id);
+      refreshNotifs();
+    }
+  };
+
+  const handleClearNotifs = () => {
+    if (user) {
+      fs.clearNotifs(user.uid);
+      refreshNotifs();
+    }
+  };
+
+  /* =========================================================
+   * VERİ YÜKLEME
    * ========================================================= */
   const refreshAllData = useCallback(async () => {
     if (!user) return;
@@ -70,7 +95,7 @@ function App() {
       meets.forEach((meeting) => {
         const meetingAtts = atts.filter((a) => a.meetingId === meeting.id || String(a.meetingId) === String(meeting.id));
         const attIds = new Set(meetingAtts.map((a) => a.memberId));
-        newAttendeeMap[meeting.id] = mems.filter((m) => attIds.has(m.id) || attIds.has(Number(m.id)));
+        newAttendeeMap[meeting.id] = mems.filter((m) => attIds.has(m.id) || attIds.has(String(m.id)));
       });
       setAttendeeMap(newAttendeeMap);
 
@@ -103,7 +128,7 @@ function App() {
     return () => unsub();
   }, [user]);
 
-  // Admin panelinde tarih değiştiğinde izinleri tazele
+  // Admin panelinde veri değişimi
   useEffect(() => {
     if (user && isAdmin && activeTab === 'admin-panel') {
       fs.getLogPermissionsForDate(permDate).then(setDatePerms).catch(() => {});
@@ -112,7 +137,7 @@ function App() {
   }, [user, isAdmin, permDate, activeTab]);
 
   /* =========================================================
-   * OTOMATIK GRI LISTE KONTROLU (Sadece Admin veya Yetkili trigger eder)
+   * OTOMATİK GRİ LİSTE VE BİLDİRİM ENTREGASYONU
    * ========================================================= */
   useEffect(() => {
     if (!user || (!isAdmin && !hasTodayPermission) || meetings.length < 3 || members.length === 0) return;
@@ -138,108 +163,43 @@ function App() {
         const isCurrentlyGrey = greyList.some((g) => String(g.memberId) === String(member.id));
 
         if (!attendedAny && !isCurrentlyGrey) {
+          // Gri listeye ekle
           await fs.addToGreyListFS(member.id, 'Son 3 toplantıya üst üste katılmadı');
+          
+          // Üyeye bildirim gönder
+          fs.addNotif(member.id, 'Sistem Uyarısı: Son 3 toplantıya üst üste katılmadığınız için Gri Liste\'ye eklendiniz!', 'warning');
+          
+          // Adminlere bildirim gönder
+          await fs.pushNotifToAdmins(`Sistem Uyarısı: ${member.name} (${member.email}) son 3 toplantıya üst üste katılmadığı için gri listeye eklendi!`, 'warning');
+          
           updated = true;
         } else if (attendedAny && isCurrentlyGrey) {
+          // Gri listeden çıkar
           await fs.removeFromGreyListFS(member.id);
+          
+          // Üyeye bildirim gönder
+          fs.addNotif(member.id, 'Sistem Bilgisi: Toplantı katılımınız nedeniyle Gri Liste\'den çıkarıldınız. Teşekkürler!', 'info');
+          
           updated = true;
         }
       }
 
       if (updated) {
         fs.getGreyListFS().then(setGreyList);
+        refreshNotifs();
       }
     };
 
     runAutoGreyListCheck().catch(() => {});
-  }, [meetings, members, attendeeMap, greyList, isAdmin, hasTodayPermission, user]);
+  }, [meetings, members, attendeeMap, greyList, isAdmin, hasTodayPermission, user, refreshNotifs]);
 
   /* =========================================================
-   * YETKI KONTROL FONKSIYONLARI
+   * YETKİ KONTROL FONKSİYONLARI
    * ========================================================= */
   const checkLogPermission = (meetingDate) => {
     if (isAdmin) return true;
     const today = getTodayISO();
-    // Eğer toplantı tarihi bugünse ve bugün için log izni varsa izin verilir
     return hasTodayPermission && meetingDate === today;
-  };
-
-  /* =========================================================
-   * MEMBER CRUD (Sadece Admin veya o gün yetkisi olan)
-   * ========================================================= */
-  const validateMember = () => {
-    if (!memberForm.name.trim()) return 'İsim zorunludur.';
-    if (!memberForm.email.trim()) return 'E-posta zorunludur.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(memberForm.email.trim()))
-      return 'Geçerli bir e-posta adresi girin.';
-    const dup = members.find(
-      (m) => m.email.toLowerCase() === memberForm.email.trim().toLowerCase() && m.id !== editingMember?.id
-    );
-    if (dup) return 'Bu e-posta zaten kayıtlı.';
-    return '';
-  };
-
-  const handleMemberSubmit = async (e) => {
-    e.preventDefault();
-    if (!isAdmin && !hasTodayPermission) return;
-    const err = validateMember();
-    if (err) { setMemberError(err); return; }
-    setBusy(true);
-    try {
-      if (editingMember) {
-        await fs.updateMemberFS(editingMember.id, {
-          name: memberForm.name.trim(),
-          email: memberForm.email.trim().toLowerCase(),
-        });
-        setEditingMember(null);
-      } else {
-        await fs.addMemberFS(memberForm);
-      }
-      setMemberForm({ name: '', email: '' });
-      setMemberError('');
-      await refreshAllData();
-      setActiveTab('members');
-    } catch (err) {
-      setMemberError('Üye kaydedilirken hata: ' + (err?.message || ''));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const startEditMember = (m) => {
-    if (!isAdmin && !hasTodayPermission) return;
-    setEditingMember(m);
-    setMemberForm({ name: m.name, email: m.email });
-    setMemberError('');
-    setActiveTab('new-member');
-  };
-
-  const cancelEditMember = () => {
-    setEditingMember(null);
-    setMemberForm({ name: '', email: '' });
-    setMemberError('');
-    setActiveTab('members');
-  };
-
-  const toggleMemberActive = async (m) => {
-    if (!isAdmin && !hasTodayPermission) return;
-    try {
-      await fs.updateMemberFS(m.id, { isActive: !m.isActive });
-      await refreshAllData();
-    } catch (e) {
-      alert('Üye güncellenemedi: ' + e.message);
-    }
-  };
-
-  const deleteMember = async (id, name) => {
-    if (!isAdmin) { alert('Sadece Admin üyeleri silebilir.'); return; }
-    if (!window.confirm(`${name} üyesini silmek istediğinize emin misiniz?`)) return;
-    try {
-      await fs.deleteMemberFS(id);
-      await refreshAllData();
-    } catch (e) {
-      alert('Üye silinemedi: ' + e.message);
-    }
   };
 
   /* =========================================================
@@ -280,12 +240,17 @@ function App() {
         if (newMeet && newMeetingAttendees.length > 0) {
           await fs.addAttendanceFS(newMeet.id, newMeetingAttendees);
         }
+        
+        // BÜTÜN ÜYELERE TOPLANTI BİLDİRİMİ GÖNDER
+        await fs.pushNotifAllMembers(`Yeni Toplantı Eklendi: ${payload.title} (${new Date(payload.date).toLocaleDateString('tr-TR')})`, 'meeting');
+        
         setNewMeetingAttendees([]);
       }
 
       setMeetingForm({ title: '', date: getTodayISO(), gundem: '', kararlar: '', gorevler: '' });
       setMeetingError('');
       await refreshAllData();
+      refreshNotifs();
       setActiveTab('meetings');
     } catch (err) {
       setMeetingError('Toplantı kaydedilirken hata: ' + (err?.message || ''));
@@ -391,6 +356,7 @@ function App() {
     try {
       await fs.grantLogPermission(targetUid, permDate);
       setAdminMsg(`${permDate} tarihi için yetki verildi.`);
+      fs.addNotif(targetUid, `Tebrikler! Admin tarafından ${new Date(permDate).toLocaleDateString('tr-TR')} tarihi için Toplantı Logu yazma izni aldınız.`, 'info');
       const updatedPerms = await fs.getLogPermissionsForDate(permDate);
       setDatePerms(updatedPerms);
     } catch (e) {
@@ -430,17 +396,62 @@ function App() {
     }
   };
 
+  const handleToggleUserActive = async (uid, currentActive) => {
+    if (!isAdmin) return;
+    setBusy(true);
+    try {
+      await fs.updateMemberFS(uid, { isActive: !currentActive });
+      setAdminMsg('Kullanıcı aktiflik durumu güncellendi.');
+      await refreshAllData();
+    } catch (e) {
+      setAdminMsg('Hata: ' + e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   /* =========================================================
-   * ARTIKLAR, FILTRELEMELER VE TAKVIM
+   * PROFİL & İSTATİSTİK HESAPLAMA
    * ========================================================= */
-  const filteredMembers = members
-    .filter((m) => showInactive || m.isActive)
-    .filter((m) => {
-      if (!search) return true;
-      const hay = (m.name + ' ' + m.email).toLowerCase();
-      return hay.includes(search.toLowerCase());
+  const getProfileStats = () => {
+    if (!user) return { attended: 0, missed: 0, total: 0, rate: 0, history: [] };
+
+    let attended = 0;
+    let missed = 0;
+    const history = [];
+
+    // Toplantıları tarihe göre sıralayalım
+    const sortedMeetings = [...meetings].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    sortedMeetings.forEach((m) => {
+      const attendees = attendeeMap[m.id] || [];
+      const didAttend = attendees.some((a) => String(a.id) === String(user.uid));
+
+      if (didAttend) {
+        attended++;
+      } else {
+        missed++;
+      }
+
+      history.push({
+        id: m.id,
+        title: m.title,
+        date: m.date,
+        attended: didAttend,
+      });
     });
 
+    const total = meetings.length;
+    const rate = total > 0 ? Math.round((attended / total) * 100) : 100;
+
+    return { attended, missed, total, rate, history };
+  };
+
+  const profileStats = getProfileStats();
+
+  /* =========================================================
+   * ARTIKLAR, FİLTRELEMELER VE TAKVİM
+   * ========================================================= */
   const filteredMeetings = meetings
     .filter((m) => {
       if (!search) return true;
@@ -488,8 +499,10 @@ function App() {
         )
       : 0;
 
+  const unreadNotifCount = notifs.filter((n) => !n.read).length;
+
   /* =========================================================
-   * YUKLEME VE HATA EKRANLARI
+   * YÜKLEME VE HATA EKRANLARI
    * ========================================================= */
   if (loading) {
     return (
@@ -521,7 +534,7 @@ function App() {
         <p className="header-sub">Bilişim Topluluğu — Toplantı Log Sistemi</p>
       </header>
 
-      {/* ---- CANLI IZIN BILDIRIMI (Regular User ise) ---- */}
+      {/* ---- CANLI İZİN BİLDİRİMİ ---- */}
       {!isAdmin && hasTodayPermission && (
         <div style={{ background: 'var(--success-bg)', borderBottom: '1px solid var(--success-border)', padding: '0.5rem 1rem', textAlign: 'center', fontSize: '0.85rem', color: 'var(--success)', fontWeight: 600 }}>
           ✓ Bugün için Toplantı Logu tutma yetkiniz bulunmaktadır. Toplantı ekleyebilir ve yoklama alabilirsiniz.
@@ -579,12 +592,6 @@ function App() {
             Toplantılar
           </button>
           <button
-            className={`tab ${activeTab === 'members' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('members')}
-          >
-            Üyeler
-          </button>
-          <button
             className={`tab ${activeTab === 'grey-list' ? 'tab-active' : ''}`}
             onClick={() => setActiveTab('grey-list')}
           >
@@ -595,6 +602,12 @@ function App() {
             onClick={() => setActiveTab('calendar')}
           >
             Takvim
+          </button>
+          <button
+            className={`tab ${activeTab === 'profile' ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab('profile')}
+          >
+            Profil{unreadNotifCount > 0 && <span className="tab-badge" style={{ background: 'var(--accent-blue)' }}>{unreadNotifCount}</span>}
           </button>
           {isAdmin && (
             <button
@@ -796,125 +809,6 @@ function App() {
               </section>
             )}
 
-            {/* === MEMBERS TAB === */}
-            {activeTab === 'members' && (
-              <section className="section">
-                <div className="section-header">
-                  <h2>Üye Listesi</h2>
-                  <div className="section-header-right">
-                    <label className="toggle-label">
-                      <input
-                        type="checkbox"
-                        checked={showInactive}
-                        onChange={(e) => setShowInactive(e.target.checked)}
-                      />
-                      Pasif üyeleri göster
-                    </label>
-                  </div>
-                </div>
-                {(isAdmin || hasTodayPermission) && (
-                  <button className="btn btn-primary" style={{ marginBottom: '1rem' }} onClick={() => setActiveTab('new-member')}>
-                    + Yeni Üye
-                  </button>
-                )}
-                {filteredMembers.length === 0 ? (
-                  <p className="empty-msg">
-                    {search ? 'Aramanızla eşleşen üye bulunamadı.' : 'Henüz üye kaydı yok.'}
-                  </p>
-                ) : (
-                  <div className="table-wrap">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>İsim</th>
-                          <th>E-posta</th>
-                          <th>Durum</th>
-                          <th>Katıldığı Toplantı</th>
-                          {(isAdmin || hasTodayPermission) && <th>İşlemler</th>}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredMembers.map((m) => {
-                          const memberMeetingCount = Object.values(attendeeMap).filter((list) =>
-                            list?.some((a) => String(a.id) === String(m.id))
-                          ).length;
-                          return (
-                            <tr key={m.id} className={!m.isActive ? 'row-inactive' : ''}>
-                              <td>{m.name}</td>
-                              <td>{m.email}</td>
-                              <td>
-                                <span className={`badge ${m.isActive ? 'badge-active' : 'badge-inactive'}`}>
-                                  {m.isActive ? 'Aktif' : 'Pasif'}
-                                </span>
-                              </td>
-                              <td>{memberMeetingCount}</td>
-                              {(isAdmin || hasTodayPermission) && (
-                                <td className="action-cell">
-                                  <button className="btn btn-sm" onClick={() => startEditMember(m)}>
-                                    Düzenle
-                                  </button>
-                                  <button
-                                    className={`btn btn-sm ${m.isActive ? 'btn-warn' : 'btn-success'}`}
-                                    onClick={() => toggleMemberActive(m)}
-                                  >
-                                    {m.isActive ? 'Pasif Yap' : 'Aktif Yap'}
-                                  </button>
-                                  {isAdmin && (
-                                    <button
-                                      className="btn btn-sm btn-danger"
-                                      onClick={() => deleteMember(m.id, m.name)}
-                                    >
-                                      Sil
-                                    </button>
-                                  )}
-                                </td>
-                              )}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
-            )}
-
-            {/* === NEW/EDIT MEMBER FORM === */}
-            {activeTab === 'new-member' && (
-              <section className="section">
-                <h2>{editingMember ? 'Üyeyi Düzenle' : 'Yeni Üye Ekle'}</h2>
-                <form className="form" onSubmit={handleMemberSubmit}>
-                  <div className="form-group">
-                    <label>İsim</label>
-                    <input
-                      type="text"
-                      value={memberForm.name}
-                      onChange={(e) => setMemberForm({ ...memberForm, name: e.target.value })}
-                      placeholder="Ad Soyad"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>E-posta</label>
-                    <input
-                      type="email"
-                      value={memberForm.email}
-                      onChange={(e) => setMemberForm({ ...memberForm, email: e.target.value })}
-                      placeholder="ornek@mail.com"
-                    />
-                  </div>
-                  {memberError && <p className="form-error">{memberError}</p>}
-                  <div className="form-actions">
-                    <button type="submit" className="btn btn-primary" disabled={busy}>
-                      {busy ? 'Kaydediliyor...' : (editingMember ? 'Güncelle' : 'Kaydet')}
-                    </button>
-                    <button type="button" className="btn" onClick={cancelEditMember}>
-                      İptal
-                    </button>
-                  </div>
-                </form>
-              </section>
-            )}
-
             {/* === GREY LIST TAB === */}
             {activeTab === 'grey-list' && (
               <section className="section">
@@ -1015,10 +909,132 @@ function App() {
               </section>
             )}
 
+            {/* === PROFIL TAB (Yeni Eklenen) === */}
+            {activeTab === 'profile' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {/* A. Profil Detayı & İstatistikler */}
+                <div className="section" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', borderRight: '1px solid var(--border-color)', paddingRight: '2rem' }}>
+                    <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-blue))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 'bold', color: '#fff', marginBottom: '1rem' }}>
+                      {user.displayName ? user.displayName.slice(0, 1).toUpperCase() : 'U'}
+                    </div>
+                    <h3 style={{ fontSize: '1.25rem', marginBottom: '0.2rem' }}>{user.displayName}</h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{user.email}</p>
+                    <span className="badge badge-active" style={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.7rem' }}>
+                      {role || 'user'}
+                    </span>
+
+                    <div style={{ marginTop: '2rem', width: '100%' }}>
+                      <strong style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>KATILIM ORANI</strong>
+                      <div style={{ background: 'var(--bg-tertiary)', height: '24px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)', position: 'relative' }}>
+                        <div style={{ width: `${profileStats.rate}%`, background: 'linear-gradient(90deg, var(--accent-purple), var(--accent-blue))', height: '100%', borderRadius: '12px', transition: 'width 0.5s ease-out' }} />
+                        <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 'bold', color: '#fff' }}>%{profileStats.rate}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: 'var(--accent-purple)' }}>Toplantı Katılım İstatistikleriniz</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+                      <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', textAlign: 'center' }}>
+                        <span style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--accent-blue)', display: 'block' }}>{profileStats.total}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Toplam Toplantı</span>
+                      </div>
+                      <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', textAlign: 'center' }}>
+                        <span style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--success)', display: 'block' }}>{profileStats.attended}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Katıldığınız</span>
+                      </div>
+                      <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', textAlign: 'center' }}>
+                        <span style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--danger)', display: 'block' }}>{profileStats.missed}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Kaçırdığınız</span>
+                      </div>
+                    </div>
+
+                    <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem', color: 'var(--accent-blue)' }}>Katılım Geçmişiniz</h3>
+                    <div className="table-wrap" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                      <table className="table">
+                        <thead>
+                          <tr><th>Toplantı</th><th>Tarih</th><th>Durum</th></tr>
+                        </thead>
+                        <tbody>
+                          {profileStats.history.length === 0 && (
+                            <tr><td colSpan={3} className="empty-msg">Kayıtlı toplantı yok.</td></tr>
+                          )}
+                          {profileStats.history.map((h) => (
+                            <tr key={h.id}>
+                              <td>{h.title}</td>
+                              <td>{new Date(h.date).toLocaleDateString('tr-TR')}</td>
+                              <td>
+                                <span className={`badge ${h.attended ? 'badge-active' : 'badge-inactive'}`}>
+                                  {h.attended ? '✓ Katıldı' : '✗ Katılmadı'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* B. Bildirimler Bölümü */}
+                <div className="section">
+                  <div className="section-header">
+                    <h2>Bildirimler {unreadNotifCount > 0 && <span className="tab-badge" style={{ background: 'var(--danger)', display: 'inline-block' }}>{unreadNotifCount}</span>}</h2>
+                    {notifs.length > 0 && (
+                      <div className="section-header-right">
+                        <button className="btn btn-sm btn-danger" onClick={handleClearNotifs}>Bildirimleri Temizle</button>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                    {notifs.length === 0 ? (
+                      <p className="empty-msg" style={{ padding: '2rem 0' }}>Hiç bildiriminiz yok.</p>
+                    ) : (
+                      notifs.map((n) => {
+                        let icon = 'ℹ️';
+                        let borderStyle = '1px solid var(--border-color)';
+                        if (n.type === 'warning') { icon = '⚠️'; borderStyle = '1px solid var(--warn-border)'; }
+                        if (n.type === 'meeting') { icon = '📅'; borderStyle = '1px solid rgba(88,166,255,0.4)'; }
+                        return (
+                          <div
+                            key={n.id}
+                            onClick={() => handleMarkNotifRead(n.id)}
+                            style={{
+                              background: n.read ? 'var(--bg-tertiary)' : 'var(--bg-elevated)',
+                              border: borderStyle,
+                              borderRadius: '8px',
+                              padding: '0.75rem 1rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.75rem',
+                              cursor: 'pointer',
+                              opacity: n.read ? 0.7 : 1,
+                              transition: 'all 0.15s'
+                            }}
+                          >
+                            <span style={{ fontSize: '1.25rem' }}>{icon}</span>
+                            <div style={{ flex: 1 }}>
+                              <p style={{ fontSize: '0.9rem', color: 'var(--text-primary)', margin: 0, fontWeight: n.read ? 'normal' : 'bold' }}>{n.message}</p>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{new Date(n.created).toLocaleString('tr-TR')}</span>
+                            </div>
+                            {!n.read && (
+                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-blue)' }} title="Okunmadı" />
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* === ADMIN PANEL TAB === */}
             {activeTab === 'admin-panel' && isAdmin && (
               <AdminPanel
                 users={usersList}
+                members={members}
                 perms={datePerms}
                 permDate={permDate}
                 setPermDate={setPermDate}
@@ -1028,6 +1044,7 @@ function App() {
                 grantPermission={grantPermission}
                 revokePermission={revokePermission}
                 handleRoleChange={handleRoleChange}
+                handleToggleUserActive={handleToggleUserActive}
                 busy={busy}
               />
             )}
@@ -1184,8 +1201,8 @@ const AuthScreen = () => {
  * ADMIN PANEL COMPONENT
  * ========================================================= */
 const AdminPanel = ({
-  users, perms, permDate, setPermDate, targetUid, setTargetUid,
-  adminMsg, grantPermission, revokePermission, handleRoleChange, busy
+  users, members, perms, permDate, setPermDate, targetUid, setTargetUid,
+  adminMsg, grantPermission, revokePermission, handleRoleChange, handleToggleUserActive, busy
 }) => {
   return (
     <section className="section">
@@ -1198,7 +1215,7 @@ const AdminPanel = ({
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', flexWrap: 'wrap' }}>
         <div>
-          <h3 style={{ marginBottom: '0.75rem', fontSize: '1.1rem', color: 'var(--accent-purple)' }}>A. Kullanıcı Rolleri</h3>
+          <h3 style={{ marginBottom: '0.75rem', fontSize: '1.1rem', color: 'var(--accent-purple)' }}>A. Kullanıcı Rolleri & Aktiflik</h3>
           <div className="table-wrap">
             <table className="table">
               <thead>
@@ -1221,6 +1238,17 @@ const AdminPanel = ({
                       ) : (
                         <button className="btn btn-sm btn-danger" onClick={() => handleRoleChange(u.id, 'user')} disabled={busy}>User Yap</button>
                       )}
+                      {((mbr) =>
+                        mbr && (
+                          <button
+                            className={`btn btn-sm ${mbr.isActive ? 'btn-warn' : 'btn-success'}`}
+                            onClick={() => handleToggleUserActive(u.id, mbr.isActive)}
+                            disabled={busy}
+                          >
+                            {mbr.isActive ? 'Pasif Yap' : 'Aktif Yap'}
+                          </button>
+                        )
+                      )(members.find((m) => String(m.id) === String(u.id)))}
                     </td>
                   </tr>
                 ))}

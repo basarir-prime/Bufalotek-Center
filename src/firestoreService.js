@@ -12,13 +12,6 @@ import {
 } from 'firebase/auth';
 
 /* =========================================================
- * ÇEVRİMDIÇI MOD (localStorage fallback)
- * Kullanıcı giriş yapmadıysa eski storageService kullanılır.
- * Bu sadece demo/test amaçlıdır.
- * ========================================================= */
-
-
-/* =========================================================
  * YETKI / LOG IZNI
  * ========================================================= */
 
@@ -172,7 +165,6 @@ export const getMeetingAttendeesFS = async (meetingId) => {
 
 /* =========================================================
  * GREY LIST
- * Server tarafından hesaplanması beklenir ama temel CRUD:
  * ========================================================= */
 
 export const getGreyListFS = async () => {
@@ -201,8 +193,6 @@ export const getUsersFS = async () => {
   return s.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-// Sadece Firestore profilindeki role alanını günceller.
-// Custom claim'i güncellemek için Cloud Function gerekir.
 export const updateUserRoleFS = async (uid, role) => {
   await setDoc(doc(db, 'users', String(uid)), { role, updatedAt: serverTimestamp() }, { merge: true });
 };
@@ -214,7 +204,6 @@ export const updateUserRoleFS = async (uid, role) => {
 export const signUpFS = async (email, password, name) => {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(cred.user, { displayName: name });
-  // users koleksiyonunda profil oluştur
   await setDoc(doc(db, 'users', cred.user.uid), {
     uid: cred.user.uid,
     email,
@@ -222,6 +211,17 @@ export const signUpFS = async (email, password, name) => {
     role: 'user',
     createdAt: serverTimestamp(),
   });
+  // Kayıt olan herkes otomatik olarak members'a eklensin
+  // (memberId olarak uid kullanılır, böylece her kullanıcı = bir member)
+  const memberDoc = await getDoc(doc(db, 'members', cred.user.uid));
+  if (!memberDoc.exists()) {
+    await setDoc(doc(db, 'members', cred.user.uid), {
+      name: name.trim(),
+      email: email.toLowerCase(),
+      isActive: true,
+      createdAt: serverTimestamp(),
+    });
+  }
   return cred.user;
 };
 
@@ -235,13 +235,51 @@ export const subscribeAuth = (cb) =>
 
 export const getUserRole = async (user) => {
   if (!user) return null;
-  // Önce custom claim dene
   const tokenResult = await getIdTokenResult(user, true);
   if (tokenResult.claims?.role) return tokenResult.claims.role;
-  // Yoksa users/{uid} dokümanından oku
   try {
     const d = await getDoc(doc(db, 'users', user.uid));
     if (d.exists() && d.data().role) return d.data().role;
   } catch {}
   return 'user';
+};
+
+/* =========================================================
+ * BILDIRIM SISTEMI (localStorage tabanli)
+ * ========================================================= */
+
+const NOTIF_KEY = (uid) => `bufalotek_nf_${uid}`;
+
+export const getNotifs = (uid) => {
+  try { return JSON.parse(localStorage.getItem(NOTIF_KEY(uid)) || '[]'); }
+  catch { return []; }
+};
+
+export const addNotif = (uid, message, type = 'info') => {
+  const nf = getNotifs(uid);
+  if (nf.some((n) => n.message === message && n.type === type)) return;
+  nf.unshift({ id: Date.now(), message, type, created: new Date().toISOString(), read: false });
+  localStorage.setItem(NOTIF_KEY(uid), JSON.stringify(nf));
+};
+
+export const pushNotifAllMembers = async (message, type = 'meeting') => {
+  const [members, users] = await Promise.all([getMembersFS(), getUsersFS()]);
+  const all = [...new Set([...members.map((m) => m.id), ...users.map((u) => u.id)])];
+  all.forEach((uid) => addNotif(uid, message, type));
+};
+
+export const pushNotifToAdmins = async (message, type = 'warning') => {
+  const users = await getUsersFS();
+  const admins = users.filter((u) => u.role === 'admin');
+  admins.forEach((admin) => addNotif(admin.id, message, type));
+};
+
+export const markNotifRead = (uid, notifId) => {
+  const nf = getNotifs(uid);
+  const idx = nf.findIndex((n) => n.id === notifId);
+  if (idx !== -1) { nf[idx].read = true; localStorage.setItem(NOTIF_KEY(uid), JSON.stringify(nf)); }
+};
+
+export const clearNotifs = (uid) => {
+  localStorage.setItem(NOTIF_KEY(uid), '[]');
 };
