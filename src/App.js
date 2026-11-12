@@ -17,7 +17,7 @@ function App() {
   const [notifs, setNotifs] = useState([]);
   const [hasTodayPermission, setHasTodayPermission] = useState(false);
 
-  const [activeTab, setActiveTab] = useState('profile');
+  const [page, setPage] = useState('profile');
   const [loadingData, setLoadingData] = useState(true);
   const [globalError, setGlobalError] = useState('');
 
@@ -214,11 +214,11 @@ function App() {
 
   // Admin panelinde veri değişimi
   useEffect(() => {
-    if (user && isAdmin && activeTab === 'admin-panel') {
+    if (user && isAdmin && page === 'admin-panel') {
       fs.getLogPermissionsForDate(permDate).then(setDatePerms).catch(() => {});
       fs.getUsersFS().then(setUsersList).catch(() => {});
     }
-  }, [user, isAdmin, permDate, activeTab]);
+  }, [user, isAdmin, permDate, page]);
 
   /* =========================================================
    * OTOMATİK GRİ LİSTE VE BİLDİRİM ENTREGASYONU
@@ -335,7 +335,7 @@ function App() {
       setMeetingError('');
       await refreshAllData();
       refreshNotifs();
-      setActiveTab('meetings');
+      setPage('meetings');
     } catch (err) {
       setMeetingError('Toplantı kaydedilirken hata: ' + (err?.message || ''));
     } finally {
@@ -357,7 +357,7 @@ function App() {
       gorevler: m.gorevler || '',
     });
     setMeetingError('');
-    setActiveTab('new-meeting');
+    setPage('new-meeting');
   };
 
   const cancelEditMeeting = () => {
@@ -365,7 +365,7 @@ function App() {
     setMeetingForm({ title: '', date: getTodayISO(), gundem: '', kararlar: '', gorevler: '' });
     setMeetingError('');
     setNewMeetingAttendees([]);
-    setActiveTab('meetings');
+    setPage('meetings');
   };
 
   const deleteMeeting = async (id, title) => {
@@ -647,7 +647,7 @@ function App() {
 
       {/* ---- GREY LIST ALERT BANNER ---- */}
       {greyList.length > 0 && (
-        <div className="alert-banner" onClick={() => setActiveTab('grey-list')} role="button" tabIndex={0}>
+        <div className="alert-banner" onClick={() => setPage('grey-list')} role="button" tabIndex={0}>
           <span className="alert-icon">⚠</span>
           <span className="alert-text">
             <strong>Sistem Uyarısı:</strong> {greyList.length} üye son 3 toplantıya üst üste katılmadı, gri listeye alındı.
@@ -673,39 +673,39 @@ function App() {
         />
         <div className="tabs">
           <button
-            className={`tab ${activeTab === 'meetings' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('meetings')}
+            className={`tab ${page === 'meetings' ? 'tab-active' : ''}`}
+            onClick={() => setPage('meetings')}
           >
             Toplantılar
           </button>
           <button
-            className={`tab ${activeTab === 'grey-list' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('grey-list')}
+            className={`tab ${page === 'grey-list' ? 'tab-active' : ''}`}
+            onClick={() => setPage('grey-list')}
           >
             Gri Liste{greyList.length > 0 && <span className="tab-badge">{greyList.length}</span>}
           </button>
           <button
-            className={`tab ${activeTab === 'departments' ? 'tab-active' : ''}`}
-            onClick={() => { setActiveTab('departments'); setDeptViewMode('list'); setSelectedDepartment(null); }}
+            className={`tab ${page === 'departments' ? 'tab-active' : ''}`}
+            onClick={() => { setPage('departments'); setDeptViewMode('list'); setSelectedDepartment(null); }}
           >
             Departmanlar
           </button>
           <button
-            className={`tab ${activeTab === 'calendar' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('calendar')}
+            className={`tab ${page === 'calendar' ? 'tab-active' : ''}`}
+            onClick={() => setPage('calendar')}
           >
             Takvim
           </button>
           <button
-            className={`tab ${activeTab === 'profile' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('profile')}
+            className={`tab ${page === 'profile' ? 'tab-active' : ''}`}
+            onClick={() => setPage('profile')}
           >
             Profil{unreadNotifCount > 0 && <span className="tab-badge" style={{ background: 'var(--accent-blue)' }}>{unreadNotifCount}</span>}
           </button>
           {isAdmin && (
             <button
-              className={`tab ${activeTab === 'admin-panel' ? 'tab-active' : ''}`}
-              onClick={() => setActiveTab('admin-panel')}
+              className={`tab ${page === 'admin-panel' ? 'tab-active' : ''}`}
+              onClick={() => setPage('admin-panel')}
             >
               Admin Paneli
             </button>
@@ -720,12 +720,12 @@ function App() {
         ) : (
           <>
             {/* === MEETINGS TAB === */}
-            {activeTab === 'meetings' && (
+            {page === 'meetings' && (
               <section className="section">
                 <div className="section-header">
                   <h2>Toplantılar</h2>
                   {(isAdmin || hasTodayPermission) && (
-                    <button className="btn btn-primary" onClick={() => setActiveTab('new-meeting')}>
+                    <button className="btn btn-primary" onClick={() => setPage('new-meeting')}>
                       + Yeni Toplantı
                     </button>
                   )}
@@ -856,7 +856,7 @@ function App() {
             )}
 
             {/* === NEW/EDIT MEETING FORM === */}
-            {activeTab === 'new-meeting' && (
+            {page === 'new-meeting' && (
               <section className="section">
                 <h2>{editingMeeting ? 'Toplantıyı Düzenle' : 'Yeni Toplantı Ekle'}</h2>
                 <form className="form" onSubmit={handleMeetingSubmit}>
@@ -957,7 +957,7 @@ function App() {
             )}
 
             {/* === GREY LIST TAB === */}
-            {activeTab === 'grey-list' && (
+            {page === 'grey-list' && (
               <section className="section">
                 <div className="section-header">
                   <h2>Gri Liste</h2>
@@ -1023,7 +1023,7 @@ function App() {
             )}
 
             {/* === CALENDAR TAB === */}
-            {activeTab === 'calendar' && (
+            {page === 'calendar' && (
               <section className="section">
                 <h2>Toplantı Takvimi</h2>
                 <div className="calendar-grid">
@@ -1061,7 +1061,7 @@ function App() {
             )}
 
             {/* === PROFIL TAB (Kişisel Dashboard) === */}
-            {activeTab === 'profile' && (
+            {page === 'profile' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 {/* A. KİŞİSEL BİLGİLER */}
                 <div className="section">
@@ -1302,7 +1302,7 @@ function App() {
             )}
 
             {/* === DEPARTMANLAR LISTESİ === */}
-            {activeTab === 'departments' && deptViewMode === 'list' && (
+            {page === 'departments' && deptViewMode === 'list' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 <div className="section">
                   <div className="section-header">
@@ -1364,7 +1364,7 @@ function App() {
             )}
 
             {/* === DEPARTMAN DETAY === */}
-            {activeTab === 'departments' && deptViewMode === 'detail' && selectedDepartment && (
+            {page === 'departments' && deptViewMode === 'detail' && selectedDepartment && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 <div className="section">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
@@ -1492,7 +1492,7 @@ function App() {
                 </div>
               </div>
             )}
-            {activeTab === 'admin-panel' && isAdmin && (
+            {page === 'admin-panel' && isAdmin && (
               <AdminPanel
                 users={usersList}
                 members={members}
