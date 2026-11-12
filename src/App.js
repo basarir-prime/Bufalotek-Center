@@ -17,7 +17,7 @@ function App() {
   const [notifs, setNotifs] = useState([]);
   const [hasTodayPermission, setHasTodayPermission] = useState(false);
 
-  const [activeTab, setActiveTab] = useState('meetings');
+  const [activeTab, setActiveTab] = useState('profile');
   const [loadingData, setLoadingData] = useState(true);
   const [globalError, setGlobalError] = useState('');
 
