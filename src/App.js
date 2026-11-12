@@ -463,7 +463,15 @@ function App() {
   /* =========================================================
    * ARTIKLAR, FİLTRELEMELER VE TAKVİM
    * ========================================================= */
-  const filteredMeetings = meetings
+  const todayISO = getTodayISO();
+
+  const upcomingMeetings = meetings
+    .filter((m) => m.date >= todayISO)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const pastMeetings = meetings
+    .filter((m) => m.date < todayISO)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
     .filter((m) => {
       if (!search) return true;
       const hay = (
@@ -475,8 +483,7 @@ function App() {
         m.date
       ).toLowerCase();
       return hay.includes(search.toLowerCase());
-    })
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+    });
 
   const getCalendarDays = () => {
     const days = [];
@@ -488,14 +495,22 @@ function App() {
     return days.reverse();
   };
 
-  const dayHasMeeting = (date) => {
-    const ds = date.toISOString().split('T')[0];
-    return meetings.some((m) => m.date === ds);
-  };
-
   const dayMeetings = (date) => {
     const ds = date.toISOString().split('T')[0];
     return meetings.filter((m) => m.date === ds);
+  };
+
+  const dayStatus = (date) => {
+    const ds = date.toISOString().split('T')[0];
+    const ms = meetings.filter((m) => m.date === ds);
+    if (ms.length === 0) return 'none';
+    // Bugün veya gelecekse: planlı
+    if (ds >= todayISO) return 'upcoming';
+    // Geçmiş: katıldıysa success, kaçıracaksa danger
+    const meeting = ms[0];
+    const atts = attendeeMap[meeting.id] || [];
+    const didAttend = atts.some((a) => String(a.id) === String(user.uid));
+    return didAttend ? 'attended' : 'missed';
   };
 
   const activeMemberCount = members.filter((m) => m.isActive).length;
@@ -641,80 +656,134 @@ function App() {
             {activeTab === 'meetings' && (
               <section className="section">
                 <div className="section-header">
-                  <h2>Toplantı Listesi</h2>
+                  <h2>Toplantılar</h2>
                   {(isAdmin || hasTodayPermission) && (
                     <button className="btn btn-primary" onClick={() => setActiveTab('new-meeting')}>
                       + Yeni Toplantı
                     </button>
                   )}
                 </div>
-                {filteredMeetings.length === 0 ? (
-                  <p className="empty-msg">
-                    {search ? 'Aramanızla eşleşen toplantı bulunamadı.' : 'Henüz toplantı kaydı yok.'}
-                  </p>
-                ) : (
-                  <div className="card-grid">
-                    {filteredMeetings.map((m) => {
-                      const attendees = attendeeMap[m.id] || [];
-                      const canManage = checkLogPermission(m.date);
-                      return (
-                        <div className="card" key={m.id}>
-                          <div className="card-body">
-                            <h3 className="card-title">{m.title}</h3>
-                            <span className="card-date">{new Date(m.date).toLocaleDateString('tr-TR')}</span>
-                            
-                            <div className="notes-grouped">
-                              <div className="notes-group">
-                                <strong className="notes-group-title">Gündem ve Konuşulanlar:</strong>
-                                <p className="notes-group-text">{m.gundem || m.notes || '-'}</p>
-                              </div>
-                              <div className="notes-group">
-                                <strong className="notes-group-title">Alınan Kararlar:</strong>
-                                <p className="notes-group-text">{m.kararlar || '-'}</p>
-                              </div>
-                              <div className="notes-group">
-                                <strong className="notes-group-title">Görevler:</strong>
-                                <p className="notes-group-text">{m.gorevler || '-'}</p>
+
+                {/* GELECEK TOPLANTILAR */}
+                {upcomingMeetings.length > 0 && (
+                  <>
+                    <h3 style={{ marginTop: '1.5rem', fontSize: '1.1rem', color: 'var(--accent-blue)' }}>
+                      📅 Gelecek Toplantılar
+                    </h3>
+                    <div className="card-grid">
+                      {upcomingMeetings.map((m) => {
+                        const attendees = attendeeMap[m.id] || [];
+                        const canManage = checkLogPermission(m.date);
+                        return (
+                          <div className="card" key={m.id}>
+                            <div className="card-body">
+                              <h3 className="card-title">{m.title}</h3>
+                              <span className="card-date">{new Date(m.date).toLocaleDateString('tr-TR')}</span>
+                              <p className="card-notes" style={{ color: 'var(--text-muted)', fontSize: '0.9rem', whiteSpace: 'pre-wrap', marginBottom: '0.75rem' }}>{m.gundem || m.notes || '-'}</p>
+                              <div className="card-attendees">
+                                <strong>Katılımcılar ({attendees.length}):</strong>
+                                {attendees.length > 0 ? (
+                                  <ul className="attendee-list">
+                                    {attendees.map((a) => (
+                                      <li key={a.id}>{a.name}</li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <span className="no-attendees">Henüz katılımcı eklenmedi</span>
+                                )}
                               </div>
                             </div>
-
-                            <div className="card-attendees">
-                              <strong>Katılımcılar ({attendees.length}):</strong>
-                              {attendees.length > 0 ? (
-                                <ul className="attendee-list">
-                                  {attendees.map((a) => (
-                                    <li key={a.id}>{a.name}</li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <span className="no-attendees">Henüz katılımcı eklenmedi</span>
+                            <div className="card-actions">
+                              {canManage && (
+                                <>
+                                  <button className="btn btn-sm" onClick={() => openAttendance(m)}>
+                                    Katılım Yönet
+                                  </button>
+                                  <button className="btn btn-sm" onClick={() => startEditMeeting(m)}>
+                                    Düzenle
+                                  </button>
+                                </>
+                              )}
+                              {isAdmin && (
+                                <button
+                                  className="btn btn-sm btn-danger"
+                                  onClick={() => deleteMeeting(m.id, m.title)}
+                                >
+                                  Sil
+                                </button>
                               )}
                             </div>
                           </div>
-                          <div className="card-actions">
-                            {canManage && (
-                              <>
-                                <button className="btn btn-sm" onClick={() => openAttendance(m)}>
-                                  Katılım Yönet
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* GEÇMİŞ TOPLANTILAR */}
+                {pastMeetings.length > 0 && (
+                  <>
+                    <h3 style={{ marginTop: '2rem', fontSize: '1.1rem', color: 'var(--text-secondary)' }}>
+                      📋 Geçmiş Toplantılar
+                    </h3>
+                    <div className="card-grid">
+                      {pastMeetings.map((m) => {
+                        const attendees = attendeeMap[m.id] || [];
+                        const didAttend = attendees.some((a) => String(a.id) === String(user.uid));
+                        const canManage = checkLogPermission(m.date);
+                        return (
+                          <div className={`card ${didAttend ? '' : 'row-grey'}`} key={m.id}>
+                            <div className="card-body">
+                              <h3 className="card-title">{m.title}</h3>
+                              <span className="card-date">{new Date(m.date).toLocaleDateString('tr-TR')}</span>
+                              <span className={`badge ${didAttend ? 'badge-active' : 'badge-inactive'}`} style={{ marginLeft: '0.5rem' }}>
+                                {didAttend ? 'Katıldınız' : 'Katılmadınız'}
+                              </span>
+                              <p className="card-notes" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', whiteSpace: 'pre-wrap', marginBottom: '0.75rem' }}>{m.gundem || m.notes || '-'}</p>
+                              <div className="card-attendees">
+                                <strong>Katılımcılar ({attendees.length}):</strong>
+                                {attendees.length > 0 ? (
+                                  <ul className="attendee-list">
+                                    {attendees.map((a) => (
+                                      <li key={a.id}>{a.name}</li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <span className="no-attendees">Henüz katılımcı eklenmedi</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="card-actions">
+                              {canManage && (
+                                <>
+                                  <button className="btn btn-sm" onClick={() => openAttendance(m)}>
+                                    Katılım Yönet
+                                  </button>
+                                  <button className="btn btn-sm" onClick={() => startEditMeeting(m)}>
+                                    Düzenle
+                                  </button>
+                                </>
+                              )}
+                              {isAdmin && (
+                                <button
+                                  className="btn btn-sm btn-danger"
+                                  onClick={() => deleteMeeting(m.id, m.title)}
+                                >
+                                  Sil
                                 </button>
-                                <button className="btn btn-sm" onClick={() => startEditMeeting(m)}>
-                                  Düzenle
-                                </button>
-                              </>
-                            )}
-                            {isAdmin && (
-                              <button
-                                className="btn btn-sm btn-danger"
-                                onClick={() => deleteMeeting(m.id, m.title)}
-                              >
-                                Sil
-                              </button>
-                            )}
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {upcomingMeetings.length === 0 && pastMeetings.length === 0 && (
+                  <p className="empty-msg">
+                    {search ? 'Aramanızla eşleşen toplantı bulunamadı.' : 'Henüz toplantı kaydı yok.'}
+                  </p>
                 )}
               </section>
             )}
@@ -893,10 +962,14 @@ function App() {
                 <div className="calendar-grid">
                   {getCalendarDays().map((day) => {
                     const iso = day.toISOString().split('T')[0];
-                    const has = dayHasMeeting(day);
+                    const status = dayStatus(day);
                     const meetingsOnDay = dayMeetings(day);
+                    const statusClass =
+                      status === 'attended' ? 'calendar-day-attended' :
+                      status === 'missed' ? 'calendar-day-missed' :
+                      status === 'upcoming' ? 'calendar-day-upcoming' : '';
                     return (
-                      <div key={iso} className={`calendar-day ${has ? 'calendar-day-active' : ''}`}>
+                      <div key={iso} className={`calendar-day ${statusClass}`}>
                         <div className="calendar-date">
                           <span className="calendar-day-num">{day.getDate()}</span>
                           <span className="calendar-month">
@@ -904,7 +977,7 @@ function App() {
                           </span>
                           <span className="calendar-year">{day.getFullYear()}</span>
                         </div>
-                        {has && (
+                        {status !== 'none' && (
                           <div className="calendar-meetings">
                             {meetingsOnDay.map((m) => (
                               <div key={m.id} className="calendar-meeting-dot" title={m.title}>

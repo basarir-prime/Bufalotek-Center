@@ -851,6 +851,24 @@ body {
   box-shadow: 0 0 10px rgba(163, 113, 247, 0.2);
 }
 
+.calendar-day-upcoming {
+  background: rgba(88, 166, 255, 0.12);
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 10px rgba(88, 166, 255, 0.2);
+}
+
+.calendar-day-attended {
+  background: rgba(63, 185, 80, 0.12);
+  border-color: var(--success);
+  box-shadow: 0 0 10px rgba(63, 185, 80, 0.2);
+}
+
+.calendar-day-missed {
+  background: rgba(248, 81, 73, 0.12);
+  border-color: var(--danger);
+  box-shadow: 0 0 10px rgba(248, 81, 73, 0.2);
+}
+
 .calendar-date {
   display: flex;
   flex-direction: column;
