@@ -1496,6 +1496,7 @@ function App() {
               <AdminPanel
                 users={usersList}
                 members={members}
+                meetings={meetings}
                 perms={datePerms}
                 permDate={permDate}
                 setPermDate={setPermDate}
@@ -1662,106 +1663,321 @@ const AuthScreen = () => {
  * ADMIN PANEL COMPONENT
  * ========================================================= */
 const AdminPanel = ({
-  users, members, perms, permDate, setPermDate, targetUid, setTargetUid,
+  users, members, meetings, perms, permDate, setPermDate, targetUid, setTargetUid,
   adminMsg, grantPermission, revokePermission, handleRoleChange, handleToggleUserActive, busy
 }) => {
-  return (
-    <section className="section">
-      <h2>Admin Paneli</h2>
-      <p className="section-desc">
-        Admin yetkilerini ve kullanıcıların günlük log tutma (toplantı ve yoklama ekleme/düzenleme) izinlerini buradan yönetebilirsiniz.
-      </p>
+  const adminStats = {
+    totalUsers: users.length,
+    totalAdmins: users.filter((u) => u.role === 'admin').length,
+    totalMembers: members.length,
+    activeMembers: members.filter((m) => m.isActive).length,
+    totalMeetings: meetings.length,
+    pendingPerms: perms.length,
+  };
 
-      {adminMsg && <div className="info-pill" style={{ display: 'inline-block', marginBottom: '1rem', background: 'var(--success-bg)', color: 'var(--success)', border: '1px solid var(--success-border)' }}>{adminMsg}</div>}
+  return (
+    <section className="admin-theme">
+      <div className="admin-section-header-modern">
+        <div className="admin-section-title-modern">
+          🛡️ Admin Kontrol Merkezi
+        </div>
+        <button
+          className="admin-action-btn primary"
+          onClick={() => fs.signOutFS()}
+          style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem' }}
+        >
+          Çıkış Yap
+        </button>
+      </div>
+
+      {/* Admin Mesajı */}
+      {adminMsg && (
+        <div style={{
+          background: 'rgba(16, 185, 129, 0.15)',
+          border: '1px solid rgba(16, 185, 129, 0.4)',
+          color: '#10b981',
+          padding: '0.75rem 1rem',
+          borderRadius: '8px',
+          marginBottom: '1.5rem',
+          fontSize: '0.85rem',
+          fontWeight: 500
+        }}>
+          {adminMsg}
+        </div>
+      )}
+
+      {/* İSTATİSTİK KARTLARI */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div className="admin-stat-modern">
+          <span className="admin-stat-value">{adminStats.totalUsers}</span>
+          <span className="admin-stat-label">Toplam Kullanıcı</span>
+        </div>
+        <div className="admin-stat-modern">
+          <span className="admin-stat-value" style={{ color: '#10b981' }}>{adminStats.totalAdmins}</span>
+          <span className="admin-stat-label">Admin Yetkisi</span>
+        </div>
+        <div className="admin-stat-modern">
+          <span className="admin-stat-value" style={{ color: '#3b82f6' }}>{adminStats.totalMembers}</span>
+          <span className="admin-stat-label">Üye Kaydı</span>
+        </div>
+        <div className="admin-stat-modern">
+          <span className="admin-stat-value" style={{ color: '#ef4444' }}>{adminStats.totalMeetings}</span>
+          <span className="admin-stat-label">Toplantı</span>
+        </div>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', flexWrap: 'wrap' }}>
-        <div>
-          <h3 style={{ marginBottom: '0.75rem', fontSize: '1.1rem', color: 'var(--accent-purple)' }}>A. Kullanıcı Rolleri & Aktiflik</h3>
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr><th>İsim</th><th>E-posta</th><th>Rol</th><th>Aksiyon</th></tr>
-              </thead>
-              <tbody>
-                {users.length === 0 && <tr><td colSpan={4} className="empty-msg">Kullanıcı yok.</td></tr>}
-                {users.map((u) => (
+
+        {/* === A. KULLANICI ROLLERİ & DURUM === */}
+        <div className="admin-card-modern">
+          <div style={{ marginBottom: '1rem' }}>
+            <h3 style={{ fontSize: '1.1rem', color: 'var(--admin-accent)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '1.25rem' }}>👥</span>
+              Kullanıcı Rolleri & Aktiflik
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)', margin: '0.25rem 0 0 0' }}>
+              Kullanıcı yetkilerini ve aktiflik durumlarını yönetebilirsiniz.
+            </p>
+          </div>
+          <div className="admin-table-modern">
+            <thead>
+              <tr>
+                <th>Kullanıcı</th>
+                <th>E-posta</th>
+                <th>Rol</th>
+                <th>Durum</th>
+                <th>İşlemler</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: 'center', color: 'var(--admin-text-muted)', padding: '2rem' }}>
+                    Kullanıcı kaydı bulunamadı.
+                  </td>
+                </tr>
+              )}
+              {users.map((u) => {
+                const mbr = members.find((m) => String(m.id) === String(u.id));
+                return (
                   <tr key={u.id}>
-                    <td>{u.name || 'İsimsiz'}</td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{u.email}</td>
                     <td>
-                      <span className={`badge ${u.role === 'admin' ? 'badge-active' : 'badge-inactive'}`}>
-                        {u.role || 'user'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{
+                          width: '32px', height: '32px', borderRadius: '8px',
+                          background: 'linear-gradient(135deg, var(--admin-accent), #e85d00)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#fff', fontSize: '0.9rem', fontWeight: 700
+                        }}>
+                          {(u.name || 'U').slice(0, 1).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--admin-text)' }}>{u.name || 'İsimsiz'}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--admin-text-muted)' }}>{u.role === 'admin' ? 'Admin' : 'Kullanıcı'}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--admin-text-muted)', wordBreak: 'break-all' }}>{u.email}</td>
+                    <td>
+                      <span
+                        className="badge"
+                        style={{
+                          background: u.role === 'admin' ? 'var(--admin-accent)' : '#333',
+                          color: u.role === 'admin' ? '#fff' : '#888',
+                          border: u.role === 'admin' ? '1px solid var(--admin-accent)' : '1px solid #444',
+                          fontSize: '0.75rem',
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '20px'
+                        }}
+                      >
+                        {u.role === 'admin' ? 'ADMIN' : 'USER'}
                       </span>
                     </td>
-                    <td className="action-cell">
+                    <td>
+                      <span
+                        className="badge"
+                        style={{
+                          background: mbr?.isActive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                          color: mbr?.isActive ? '#10b981' : '#ef4444',
+                          border: mbr?.isActive ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
+                          fontSize: '0.75rem',
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '20px'
+                        }}
+                      >
+                        {mbr?.isActive ? 'AKTİF' : 'PASİF'}
+                      </span>
+                    </td>
+                    <td className="admin-action-btn" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                       {u.role !== 'admin' ? (
-                        <button className="btn btn-sm btn-success" onClick={() => handleRoleChange(u.id, 'admin')} disabled={busy}>Admin Yap</button>
+                        <button
+                          className="admin-action-btn primary"
+                          onClick={() => handleRoleChange(u.id, 'admin')}
+                          disabled={busy}
+                          style={{ fontSize: '0.78rem', padding: '0.4rem 0.8rem' }}
+                        >
+                          Admin Yap
+                        </button>
                       ) : (
-                        <button className="btn btn-sm btn-danger" onClick={() => handleRoleChange(u.id, 'user')} disabled={busy}>User Yap</button>
+                        <button
+                          className="admin-action-btn danger"
+                          onClick={() => handleRoleChange(u.id, 'user')}
+                          disabled={busy}
+                          style={{ fontSize: '0.78rem', padding: '0.4rem 0.8rem' }}
+                        >
+                          User Yap
+                        </button>
                       )}
-                      {((mbr) =>
-                        mbr && (
+                      {((member) =>
+                        member && (
                           <button
-                            className={`btn btn-sm ${mbr.isActive ? 'btn-warn' : 'btn-success'}`}
-                            onClick={() => handleToggleUserActive(u.id, mbr.isActive)}
+                            className="admin-action-btn"
+                            style={{
+                              background: member.isActive ? 'transparent' : 'transparent',
+                              color: member.isActive ? '#ef4444' : '#10b981',
+                              border: `1px solid ${member.isActive ? '#ef4444' : '#10b981'}`,
+                              fontSize: '0.78rem',
+                              padding: '0.4rem 0.8rem'
+                            }}
+                            onClick={() => handleToggleUserActive(u.id, member.isActive)}
                             disabled={busy}
                           >
-                            {mbr.isActive ? 'Pasif Yap' : 'Aktif Yap'}
+                            {member.isActive ? 'Pasif Yap' : 'Aktif Yap'}
                           </button>
                         )
-                      )(members.find((m) => String(m.id) === String(u.id)))}
+                      )(mbr)}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                );
+              })}
+            </tbody>
           </div>
         </div>
 
-        <div>
-          <h3 style={{ marginBottom: '0.75rem', fontSize: '1.1rem', color: 'var(--accent-blue)' }}>B. Günlük Log İzni</h3>
-          <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
-            <div className="form-group">
-              <label>Tarih</label>
-              <input type="date" value={permDate} onChange={(e) => setPermDate(e.target.value)} />
+        {/* === B. GÜNLÜK LOG İZNİ === */}
+        <div className="admin-card-modern">
+          <div style={{ marginBottom: '1rem' }}>
+            <h3 style={{ fontSize: '1.1rem', color: 'var(--admin-accent)', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '1.25rem' }}>📅</span>
+              Günlük Log Tutma İzni
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--admin-text-muted)', margin: '0.25rem 0 0 0' }}>
+              Belirli bir kullanıcıya seçilen tarihte toplantı ve yoklama ekleme yetkisi verin.
+            </p>
+          </div>
+          <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--admin-border)', borderRadius: '10px', padding: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--admin-text)', minWidth: '80px' }}>
+                  Tarih
+                </label>
+                <input
+                  type="date"
+                  value={permDate}
+                  onChange={(e) => setPermDate(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: '#0d0d0d',
+                    border: '1px solid var(--admin-border)',
+                    color: 'var(--admin-text)',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '6px',
+                    fontSize: '0.85rem'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--admin-text)', minWidth: '80px' }}>
+                  Kullanıcı
+                </label>
+                <select
+                  value={targetUid}
+                  onChange={(e) => setTargetUid(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: '#0d0d0d',
+                    border: '1px solid var(--admin-border)',
+                    color: 'var(--admin-text)',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '6px',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  <option value="">Seçiniz...</option>
+                  {users.filter((u) => u.role !== 'admin').map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {(u.name || u.email)} ({u.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                className="admin-action-btn primary"
+                onClick={grantPermission}
+                disabled={busy || !targetUid}
+                style={{ width: '100%', padding: '0.75rem', fontSize: '0.88rem', fontWeight: 600 }}
+              >
+                {busy ? 'İşlem Devam Ediyor...' : 'Log Tutma İzni Ver'}
+              </button>
             </div>
-            <div className="form-group">
-              <label>Kullanıcı</label>
-              <select value={targetUid} onChange={(e) => setTargetUid(e.target.value)} style={{ width: '100%', padding: '0.5rem', background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-strong)', borderRadius: '6px' }}>
-                <option value="">Seçiniz...</option>
-                {users.filter(u => u.role !== 'admin').map((u) => (
-                  <option key={u.id} value={u.id}>{u.name || u.email} ({u.email})</option>
-                ))}
-              </select>
-            </div>
-            <button className="btn btn-primary" onClick={grantPermission} style={{ width: '100%' }} disabled={busy}>
-              {busy ? 'Veriliyor...' : 'Log Tutma İzni Ver'}
-            </button>
           </div>
 
-          <h4 style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>İzin Atanan Kişiler ({permDate})</h4>
-          <div className="table-wrap">
-            <table className="table">
+          <div style={{ marginTop: '1.5rem' }}>
+            <h4 style={{ fontSize: '0.85rem', color: 'var(--admin-text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '0.75rem' }}>
+              İzin Atanan Kişiler ({permDate})
+            </h4>
+            <div className="admin-table-modern">
               <thead>
-                <tr><th>Kullanıcı</th><th>İşlem</th></tr>
+                <tr>
+                  <th>Kullanıcı</th>
+                  <th>İşlem</th>
+                </tr>
               </thead>
               <tbody>
-                {perms.length === 0 && <tr><td colSpan={2} className="empty-msg">Bu tarihte izinli üye yok.</td></tr>}
+                {perms.length === 0 && (
+                  <tr>
+                    <td colSpan={2} style={{ textAlign: 'center', color: 'var(--admin-text-muted)', padding: '2rem' }}>
+                      Bu tarihte izinli üye yok.
+                    </td>
+                  </tr>
+                )}
                 {perms.map((p) => {
                   const matchedUser = users.find((u) => String(u.id) === String(p.targetUid));
                   return (
                     <tr key={p.id}>
-                      <td>{matchedUser ? matchedUser.name : p.targetUid}</td>
                       <td>
-                        <button className="btn btn-sm btn-danger" onClick={() => revokePermission(p.id)} disabled={busy}>İptal Et</button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{
+                            width: '28px', height: '28px', borderRadius: '50%',
+                            background: 'linear-gradient(135deg, var(--admin-accent), #e85d00)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: '#fff', fontSize: '0.8rem', fontWeight: 700
+                          }}>
+                            {(matchedUser?.name || 'U').slice(0, 1).toUpperCase()}
+                          </span>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--admin-text)' }}>
+                            {matchedUser?.name || matchedUser?.email || p.targetUid}
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <button
+                          className="admin-action-btn danger"
+                          onClick={() => revokePermission(p.id)}
+                          disabled={busy}
+                          style={{ fontSize: '0.78rem', padding: '0.4rem 0.8rem' }}
+                        >
+                          İptal Et
+                        </button>
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
-            </table>
+            </div>
           </div>
         </div>
+
       </div>
     </section>
   );
