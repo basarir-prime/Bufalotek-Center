@@ -17,7 +17,11 @@ function App() {
   const [notifs, setNotifs] = useState([]);
   const [hasTodayPermission, setHasTodayPermission] = useState(false);
 
-  const [page, setPage] = useState('profile');
+  const [page, setPage] = useState(() => {
+    const hash = window.location.hash.replace('#', '');
+    const validPages = ['meetings', 'grey-list', 'departments', 'calendar', 'profile', 'admin-panel', 'new-meeting', 'new-member'];
+    return validPages.includes(hash) ? hash : 'profile';
+  });
   const [loadingData, setLoadingData] = useState(true);
   const [globalError, setGlobalError] = useState('');
 
@@ -219,6 +223,23 @@ function App() {
       fs.getUsersFS().then(setUsersList).catch(() => {});
     }
   }, [user, isAdmin, permDate, page]);
+
+  // Hash değişikliğini dinle (a etiketleriyle sayfa geçişi)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      const validPages = ['meetings', 'grey-list', 'departments', 'calendar', 'profile', 'admin-panel', 'new-meeting', 'new-member'];
+      if (validPages.includes(hash)) {
+        setPage(hash);
+        if (hash === 'departments') {
+          setDeptViewMode('list');
+          setSelectedDepartment(null);
+        }
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   /* =========================================================
    * OTOMATİK GRİ LİSTE VE BİLDİRİM ENTREGASYONU
@@ -672,43 +693,49 @@ function App() {
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="tabs">
-          <button
+          <a
+            href="#meetings"
             className={`tab ${page === 'meetings' ? 'tab-active' : ''}`}
-            onClick={() => setPage('meetings')}
+            onClick={(e) => { e.preventDefault(); setPage('meetings'); }}
           >
             Toplantılar
-          </button>
-          <button
+          </a>
+          <a
+            href="#grey-list"
             className={`tab ${page === 'grey-list' ? 'tab-active' : ''}`}
-            onClick={() => setPage('grey-list')}
+            onClick={(e) => { e.preventDefault(); setPage('grey-list'); }}
           >
             Gri Liste{greyList.length > 0 && <span className="tab-badge">{greyList.length}</span>}
-          </button>
-          <button
+          </a>
+          <a
+            href="#departments"
             className={`tab ${page === 'departments' ? 'tab-active' : ''}`}
-            onClick={() => { setPage('departments'); setDeptViewMode('list'); setSelectedDepartment(null); }}
+            onClick={(e) => { e.preventDefault(); setPage('departments'); setDeptViewMode('list'); setSelectedDepartment(null); }}
           >
             Departmanlar
-          </button>
-          <button
+          </a>
+          <a
+            href="#calendar"
             className={`tab ${page === 'calendar' ? 'tab-active' : ''}`}
-            onClick={() => setPage('calendar')}
+            onClick={(e) => { e.preventDefault(); setPage('calendar'); }}
           >
             Takvim
-          </button>
-          <button
+          </a>
+          <a
+            href="#profile"
             className={`tab ${page === 'profile' ? 'tab-active' : ''}`}
-            onClick={() => setPage('profile')}
+            onClick={(e) => { e.preventDefault(); setPage('profile'); }}
           >
             Profil{unreadNotifCount > 0 && <span className="tab-badge" style={{ background: 'var(--accent-blue)' }}>{unreadNotifCount}</span>}
-          </button>
+          </a>
           {isAdmin && (
-            <button
+            <a
+              href="#admin-panel"
               className={`tab ${page === 'admin-panel' ? 'tab-active' : ''}`}
-              onClick={() => setPage('admin-panel')}
+              onClick={(e) => { e.preventDefault(); setPage('admin-panel'); }}
             >
               Admin Paneli
-            </button>
+            </a>
           )}
         </div>
       </div>
