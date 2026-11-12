@@ -309,6 +309,23 @@ export const deleteDepartmentFS = async (id) => {
   await deleteDoc(doc(db, 'departments', String(id)));
 };
 
+export const initDepartmentsFS = async () => {
+  const defaults = [
+    { name: 'Proje Departmanı', color: '#3b82f6', icon: 'project', desc: 'Proje yönetimi, planlama ve takip işlemleri' },
+    { name: 'Donanım Departmanı', color: '#ef4444', icon: 'hardware', desc: 'Donanım altyapısı, cihaz bakımı ve teknik destek' },
+    { name: 'Yazılım Departmanı', color: '#10b981', icon: 'code', desc: 'Yazılım geliştirme, kodlama ve sistem yazılımı' },
+    { name: 'PR Departmanı', color: '#8b5cf6', icon: 'megaphone', desc: 'Halkla ilişkiler, iletişim ve marka image çalışmaları' },
+    { name: 'Grafik Tasarım Departmanı', color: '#ec4899', icon: 'palette', desc: 'Görsel tasarım, marka kimliği ve grafik işleri' },
+  ];
+  const existing = await getDepartmentsFS();
+  if (existing.length === 0) {
+    for (const d of defaults) {
+      await addDepartmentFS(d.name);
+    }
+  }
+  return defaults;
+};
+
 /* =========================================================
  * PROJELER
  * ========================================================= */

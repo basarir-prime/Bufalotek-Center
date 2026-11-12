@@ -47,6 +47,60 @@ function App() {
   const [userDepartments, setUserDepartments] = useState([]);
   const [userProjects, setUserProjects] = useState([]);
   const [userTasks, setUserTasks] = useState([]);
+
+  /* =========================================================
+   * DEPARTMAN STATE VE YAPILANDIRMA
+   * ========================================================= */
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
+  const [deptViewMode, setDeptViewMode] = useState('list'); // 'list' | 'detail'
+
+  const DEPARTMENT_CONFIG = [
+    {
+      id: 'proje',
+      name: 'Proje Departmanı',
+      color: '#3b82f6',
+      icon: 'project',
+      desc: 'Proje yönetimi, planlama ve takip işlemleri',
+    },
+    {
+      id: 'donanim',
+      name: 'Donanım Departmanı',
+      color: '#ef4444',
+      icon: 'hardware',
+      desc: 'Donanım altyapısı, cihaz bakımı ve teknik destek',
+    },
+    {
+      id: 'yazilim',
+      name: 'Yazılım Departmanı',
+      color: '#10b981',
+      icon: 'code',
+      desc: 'Yazılım geliştirme, kodlama ve sistem yazılımı',
+    },
+    {
+      id: 'pr',
+      name: 'PR Departmanı',
+      color: '#8b5cf6',
+      icon: 'megaphone',
+      desc: 'Halkla ilişkiler, iletişim ve marka image çalışmaları',
+    },
+    {
+      id: 'grafik',
+      name: 'Grafik Tasarım Departmanı',
+      color: '#ec4899',
+      icon: 'palette',
+      desc: 'Görsel tasarım, marka kimliği ve grafik işleri',
+    },
+  ];
+
+  const DEPT_ICONS = {
+    project: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 2v18h18V2H3zM5 4h14v16H5V4zM7 8h10v12H7V8z" fill="currentColor"/></svg>`,
+    hardware: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" fill="currentColor"/></svg>`,
+    code: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5-10-5z" fill="currentColor"/></svg>`,
+    megaphone: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2c-4 0-8 .5-8 4v12c0 3.5 4 4 8 4s8-.5 8-4V6c0-3.5-4-4-8-4zM4 13c0-1.1.9-2 2-2s2 .9 2 2c0 .6-.4 1-1 1s-1-.4-1-1zM20 13c0-1.1.9-2 2-2s2 .9 2 2c0 .6-.4 1-1 1s-1-.4-1-1z" fill="currentColor"/></svg>`,
+    palette: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 16.83C7.89 18.83 4 14.91 4 11s3.89-7.83 8-7.83c3.64 0 6.89 2.45 7.83 5.91l1.28-3.86c-.92-3.05-3.73-5.25-7.07-5.9C12.76 3.14 10.47 2 8 2 4.69 2 2 4.69 2 8s2.69 6 6 6c2.47 0 4.76-1.14 6.24-2.91l1.29 3.88c-.93 3.46-4.15 5.91-7.53 5.91" fill="currentColor"/></svg>`,
+  };
+
+  const getDeptIcon = (iconName) => DEPT_ICONS[iconName] || DEPT_ICONS.project;
   const [newTask, setNewTask] = useState({ title: '', dueDate: '' });
 
   /* =========================================================
@@ -86,7 +140,7 @@ function App() {
     setLoadingData(true);
     setGlobalError('');
     try {
-      const [mems, meets, atts, greys, perms, usersSnap, deps, projs, userDeps, userProjs, userTsks] = await Promise.all([
+      const [mems, meets, atts, greys, perms, usersSnap, freshDeps, projs, userDeps, userProjs, userTsks] = await Promise.all([
         fs.getMembersFS(),
         fs.getMeetingsFS(),
         fs.getAttendanceFS(),
@@ -108,12 +162,15 @@ function App() {
         }
       }
 
+      // Departmanları başlat (ilk kurulumda)
+      await fs.initDepartmentsFS();
+
       // Güncel members listesini tekrar çek
       const updatedMems = await fs.getMembersFS();
       setMembers(updatedMems);
       setMeetings(meets);
       setGreyList(greys);
-      setUserDepartments(userDeps.map((ud) => ({ ...ud, departmentName: deps.find((d) => String(d.id) === String(ud.departmentId))?.name || '' })));
+      setUserDepartments(userDeps.map((ud) => ({ ...ud, departmentName: freshDeps.find((d) => String(d.id) === String(ud.departmentId))?.name || '' })));
       setUserProjects(userProjs.map((up) => ({ ...up, projectName: projs.find((p) => String(p.id) === String(up.projectId))?.name || '' })));
       setUserTasks(userTsks);
 
@@ -626,6 +683,12 @@ function App() {
             onClick={() => setActiveTab('grey-list')}
           >
             Gri Liste{greyList.length > 0 && <span className="tab-badge">{greyList.length}</span>}
+          </button>
+          <button
+            className={`tab ${activeTab === 'departments' ? 'tab-active' : ''}`}
+            onClick={() => { setActiveTab('departments'); setDeptViewMode('list'); setSelectedDepartment(null); }}
+          >
+            Departmanlar
           </button>
           <button
             className={`tab ${activeTab === 'calendar' ? 'tab-active' : ''}`}
@@ -1238,7 +1301,197 @@ function App() {
               </div>
             )}
 
-            {/* === ADMIN PANEL TAB === */}
+            {/* === DEPARTMANLAR LISTESİ === */}
+            {activeTab === 'departments' && deptViewMode === 'list' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div className="section">
+                  <div className="section-header">
+                    <h2>Departmanlar</h2>
+                    <button className="btn btn-sm" onClick={() => setDeptViewMode('list')}>Tüm Departmanlar</button>
+                  </div>
+                  <p className="section-desc">
+                    Departman bazlı toplantı, görev ve etkinlik takibi. Bir departmana tıklayarak içeriğini görüntüleyebilirsiniz.
+                  </p>
+                  <div className="card-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+                    {DEPARTMENT_CONFIG.map((dept) => {
+                      const deptMembers = members.filter((m) => {
+                        const ud = userDepartments.find((ud) => String(ud.departmentId) === dept.id && String(ud.uid) === String(m.id));
+                        return !!ud;
+                      });
+                      return (
+                        <div
+                          key={dept.id}
+                          className="card"
+                          onClick={() => { setSelectedDepartment(dept); setDeptViewMode('detail'); }}
+                          style={{ cursor: 'pointer', borderTop: `4px solid ${dept.color}`, transition: 'transform 0.2s' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
+                        >
+                          <div className="card-body" style={{ position: 'relative', overflow: 'hidden' }}>
+                            <div style={{
+                              position: 'absolute', top: '-20px', right: '-20px', width: '80px', height: '80px',
+                              background: dept.color, borderRadius: '50%', opacity: 0.15, filter: 'blur(20px)'
+                            }} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                              <div style={{
+                                width: '48px', height: '48px', borderRadius: '12px',
+                                background: dept.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: dept.color
+                              }} dangerouslySetInnerHTML={{ __html: getDeptIcon(dept.icon) }} />
+                              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>
+                                {dept.name.replace(' Departmanı', '')}
+                              </span>
+                            </div>
+                            <h3 className="card-title" style={{ fontSize: '1.25rem', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+                              {dept.name}
+                            </h3>
+                            <p className="card-notes" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem', whiteSpace: 'pre-wrap' }}>
+                              {dept.desc}
+                            </p>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span className="badge badge-active" style={{ background: dept.color + '15', color: dept.color, border: '1px solid ' + dept.color + '40', fontSize: '0.75rem' }}>
+                                {deptMembers.length} Üye
+                              </span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Detaya git →</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* === DEPARTMAN DETAY === */}
+            {activeTab === 'departments' && deptViewMode === 'detail' && selectedDepartment && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div className="section">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                    <button className="btn btn-sm" onClick={() => setDeptViewMode('list')} style={{ marginRight: 'auto' }}>
+                      ← Geri
+                    </button>
+                    <div style={{
+                      width: '56px', height: '56px', borderRadius: '14px',
+                      background: selectedDepartment.color, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', boxShadow: '0 4px 12px ' + selectedDepartment.color + '40'
+                    }} dangerouslySetInnerHTML={{ __html: getDeptIcon(selectedDepartment.icon) }} />
+                    <div>
+                      <h1 style={{ fontSize: '1.75rem', margin: 0, color: 'var(--text-primary)' }}>{selectedDepartment.name}</h1>
+                      <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                        {selectedDepartment.desc} · {members.filter((m) => userDepartments.some((ud) => String(ud.departmentId) === selectedDepartment.id && String(ud.uid) === String(m.id))).length} üye
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Departman İstatistikleri */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1rem' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Toplantı</div>
+                      <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: 'var(--accent-blue)', marginTop: '0.25rem' }}>
+                        {meetings.filter((m) => m.gundem?.includes(selectedDepartment.name) || m.notes?.includes(selectedDepartment.name)).length}
+                      </div>
+                    </div>
+                    <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1rem' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Üye</div>
+                      <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: selectedDepartment.color, marginTop: '0.25rem' }}>
+                        {members.filter((m) => userDepartments.some((ud) => String(ud.departmentId) === selectedDepartment.id && String(ud.uid) === String(m.id))).length}
+                      </div>
+                    </div>
+                    <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1rem' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Görev</div>
+                      <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: 'var(--accent-purple)', marginTop: '0.25rem' }}>
+                        {userTasks.filter((t) => t.title?.includes(selectedDepartment.name)).length}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Departman Üyeleri */}
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr><th>Üye</th><th>E-posta</th><th>Rol</th><th>Durum</th></tr>
+                      </thead>
+                      <tbody>
+                        {members.filter((m) => userDepartments.some((ud) => String(ud.departmentId) === selectedDepartment.id && String(ud.uid) === String(m.id))).length === 0 && (
+                          <tr><td colSpan={4} className="empty-msg">Bu departmanda henüz üye yok.</td></tr>
+                        )}
+                        {members.filter((m) => userDepartments.some((ud) => String(ud.departmentId) === selectedDepartment.id && String(ud.uid) === String(m.id))).map((m) => (
+                          <tr key={m.id}>
+                            <td>{m.name}</td>
+                            <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{m.email}</td>
+                            <td>
+                              <span className={`badge ${m.id === user.uid ? 'badge-active' : 'badge-inactive'}`}>
+                                {m.id === user.uid ? 'Siz' : 'Üye'}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`badge ${m.isActive ? 'badge-active' : 'badge-inactive'}`}>
+                                {m.isActive ? 'Aktif' : 'Pasif'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Departman Toplantıları */}
+                  <div style={{ marginTop: '2rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', color: 'var(--accent-purple)', marginBottom: '1rem' }}>Departman Toplantıları</h3>
+                    <div className="card-grid">
+                      {meetings.filter((m) => m.gundem?.includes(selectedDepartment.name) || m.notes?.includes(selectedDepartment.name) || m.title?.includes(selectedDepartment.name)).length === 0 && (
+                        <p className="empty-msg">Bu departmana özgü toplantı henüz yok.</p>
+                      )}
+                      {meetings.filter((m) => m.gundem?.includes(selectedDepartment.name) || m.notes?.includes(selectedDepartment.name) || m.title?.includes(selectedDepartment.name)).map((m) => {
+                        const attendees = attendeeMap[m.id] || [];
+                        return (
+                          <div className="card" key={m.id}>
+                            <div className="card-body">
+                              <h3 className="card-title">{m.title}</h3>
+                              <span className="card-date">{new Date(m.date).toLocaleDateString('tr-TR')}</span>
+                              <p className="card-notes" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', whiteSpace: 'pre-wrap', marginBottom: '0.75rem' }}>{m.gundem || m.notes || '-'}</p>
+                              <div className="card-attendees">
+                                <strong>Katılımcılar ({attendees.length}):</strong>
+                                {attendees.length > 0 ? (
+                                  <ul className="attendee-list">
+                                    {attendees.map((a) => (
+                                      <li key={a.id}>{a.name}</li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <span className="no-attendees">Henüz katılımcı eklenmedi</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="card-actions">
+                              {checkLogPermission(m.date) && (
+                                <>
+                                  <button className="btn btn-sm" onClick={() => openAttendance(m)}>
+                                    Katılım Yönet
+                                  </button>
+                                  <button className="btn btn-sm" onClick={() => startEditMeeting(m)}>
+                                    Düzenle
+                                  </button>
+                                </>
+                              )}
+                              {isAdmin && (
+                                <button
+                                  className="btn btn-sm btn-danger"
+                                  onClick={() => deleteMeeting(m.id, m.title)}
+                                >
+                                  Sil
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             {activeTab === 'admin-panel' && isAdmin && (
               <AdminPanel
                 users={usersList}
