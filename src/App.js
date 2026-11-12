@@ -42,6 +42,14 @@ function App() {
   const [busy, setBusy] = useState(false);
 
   /* =========================================================
+   * KİŞİSEL DASHBOARD STATE
+   * ========================================================= */
+  const [userDepartments, setUserDepartments] = useState([]);
+  const [userProjects, setUserProjects] = useState([]);
+  const [userTasks, setUserTasks] = useState([]);
+  const [newTask, setNewTask] = useState({ title: '', dueDate: '' });
+
+  /* =========================================================
    * BİLDİRİM OKUMA / YAZMA
    * ========================================================= */
   const refreshNotifs = useCallback(() => {
@@ -78,13 +86,18 @@ function App() {
     setLoadingData(true);
     setGlobalError('');
     try {
-      const [mems, meets, atts, greys, perms, usersSnap] = await Promise.all([
+      const [mems, meets, atts, greys, perms, usersSnap, deps, projs, userDeps, userProjs, userTsks] = await Promise.all([
         fs.getMembersFS(),
         fs.getMeetingsFS(),
         fs.getAttendanceFS(),
         fs.getGreyListFS(),
         fs.getLogPermissionsForDate(getTodayISO()),
         fs.getUsersFS(),
+        fs.getDepartmentsFS(),
+        fs.getProjectsFS(),
+        fs.getUserDepartmentsFS(),
+        fs.getUserProjectsFS(),
+        fs.getUserTasksFS(user.uid),
       ]);
 
       // Eksik kullanıcıları members'a otomatik ekle
@@ -100,6 +113,9 @@ function App() {
       setMembers(updatedMems);
       setMeetings(meets);
       setGreyList(greys);
+      setUserDepartments(userDeps.map((ud) => ({ ...ud, departmentName: deps.find((d) => String(d.id) === String(ud.departmentId))?.name || '' })));
+      setUserProjects(userProjs.map((up) => ({ ...up, projectName: projs.find((p) => String(p.id) === String(up.projectId))?.name || '' })));
+      setUserTasks(userTsks);
 
       // Katılımcı haritasını oluştur
       const newAttendeeMap = {};
@@ -421,44 +437,32 @@ function App() {
     }
   };
 
-  /* =========================================================
-   * PROFİL & İSTATİSTİK HESAPLAMA
-   * ========================================================= */
-  const getProfileStats = () => {
-    if (!user) return { attended: 0, missed: 0, total: 0, rate: 0, history: [] };
-
-    let attended = 0;
-    let missed = 0;
-    const history = [];
-
-    // Toplantıları tarihe göre sıralayalım
-    const sortedMeetings = [...meetings].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-    sortedMeetings.forEach((m) => {
-      const attendees = attendeeMap[m.id] || [];
-      const didAttend = attendees.some((a) => String(a.id) === String(user.uid));
-
-      if (didAttend) {
-        attended++;
-      } else {
-        missed++;
-      }
-
-      history.push({
-        id: m.id,
-        title: m.title,
-        date: m.date,
-        attended: didAttend,
+  const addTask = async () => {
+    if (!newTask.title.trim()) return;
+    setBusy(true);
+    try {
+      await fs.addTaskFS({
+        userId: user.uid,
+        title: newTask.title,
+        description: '',
+        dueDate: newTask.dueDate,
+        priority: 'medium',
+        status: 'pending',
       });
-    });
-
-    const total = meetings.length;
-    const rate = total > 0 ? Math.round((attended / total) * 100) : 100;
-
-    return { attended, missed, total, rate, history };
+      setNewTask({ title: '', dueDate: '' });
+      setUserTasks([...userTasks, {}]); // placeholder, refresh will update
+      await fs.getUserTasksFS(user.uid).then(setUserTasks);
+    } catch (e) {
+      alert('Görev eklenemedi: ' + e.message);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const profileStats = getProfileStats();
+  const attendedMeetings = meetings.filter((m) => {
+    const attendees = attendeeMap[m.id] || [];
+    return attendees.some((a) => String(a.id) === String(user.uid));
+  }).sort((a, b) => new Date(b.date) - new Date(a.date));
 
   /* =========================================================
    * ARTIKLAR, FİLTRELEMELER VE TAKVİM
@@ -993,85 +997,205 @@ function App() {
               </section>
             )}
 
-            {/* === PROFIL TAB (Yeni Eklenen) === */}
+            {/* === PROFIL TAB (Kişisel Dashboard) === */}
             {activeTab === 'profile' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                {/* A. Profil Detayı & İstatistikler */}
-                <div className="section" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '2rem', flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', borderRight: '1px solid var(--border-color)', paddingRight: '2rem' }}>
-                    <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-blue))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 'bold', color: '#fff', marginBottom: '1rem' }}>
-                      {user.displayName ? user.displayName.slice(0, 1).toUpperCase() : 'U'}
-                    </div>
-                    <h3 style={{ fontSize: '1.25rem', marginBottom: '0.2rem' }}>{user.displayName}</h3>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{user.email}</p>
-                    <span className="badge badge-active" style={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.7rem' }}>
-                      {role || 'user'}
-                    </span>
-
-                    <div style={{ marginTop: '2rem', width: '100%' }}>
-                      <strong style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>KATILIM ORANI</strong>
-                      <div style={{ background: 'var(--bg-tertiary)', height: '24px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)', position: 'relative' }}>
-                        <div style={{ width: `${profileStats.rate}%`, background: 'linear-gradient(90deg, var(--accent-purple), var(--accent-blue))', height: '100%', borderRadius: '12px', transition: 'width 0.5s ease-out' }} />
-                        <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 'bold', color: '#fff' }}>%{profileStats.rate}</span>
+                {/* A. KİŞİSEL BİLGİLER */}
+                <div className="section">
+                  <h2>Kişisel Bilgiler</h2>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', flexWrap: 'wrap' }}>
+                    <div className="profile-card">
+                      <div className="profile-avatar">
+                        {user.displayName ? user.displayName.slice(0, 1).toUpperCase() : 'U'}
                       </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem', color: 'var(--accent-purple)' }}>Toplantı Katılım İstatistikleriniz</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
-                      <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', textAlign: 'center' }}>
-                        <span style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--accent-blue)', display: 'block' }}>{profileStats.total}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Toplam Toplantı</span>
-                      </div>
-                      <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', textAlign: 'center' }}>
-                        <span style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--success)', display: 'block' }}>{profileStats.attended}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Katıldığınız</span>
-                      </div>
-                      <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1rem', textAlign: 'center' }}>
-                        <span style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--danger)', display: 'block' }}>{profileStats.missed}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Kaçırdığınız</span>
-                      </div>
+                      <h3>{user.displayName}</h3>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{user.email}</p>
+                      <span className="badge badge-active" style={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.7rem' }}>
+                        {role || 'user'}
+                      </span>
                     </div>
 
-                    <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem', color: 'var(--accent-blue)' }}>Katılım Geçmişiniz</h3>
-                    <div className="table-wrap" style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                      <table className="table">
-                        <thead>
-                          <tr><th>Toplantı</th><th>Tarih</th><th>Durum</th></tr>
-                        </thead>
-                        <tbody>
-                          {profileStats.history.length === 0 && (
-                            <tr><td colSpan={3} className="empty-msg">Kayıtlı toplantı yok.</td></tr>
-                          )}
-                          {profileStats.history.map((h) => (
-                            <tr key={h.id}>
-                              <td>{h.title}</td>
-                              <td>{new Date(h.date).toLocaleDateString('tr-TR')}</td>
-                              <td>
-                                <span className={`badge ${h.attended ? 'badge-active' : 'badge-inactive'}`}>
-                                  {h.attended ? '✓ Katıldı' : '✗ Katılmadı'}
-                                </span>
-                              </td>
-                            </tr>
+                    <div className="profile-card">
+                      <h4 style={{ color: 'var(--accent-purple)', marginBottom: '0.5rem' }}>Departmanlar</h4>
+                      {userDepartments.length > 0 ? (
+                        <ul className="profile-list">
+                          {userDepartments.map((d) => (
+                            <li key={d.departmentId}>
+                              <span className="badge badge-active">{d.departmentName}</span>
+                            </li>
                           ))}
-                        </tbody>
-                      </table>
+                        </ul>
+                      ) : (
+                        <p className="empty-msg" style={{ fontSize: '0.85rem' }}>Departman atanmamış.</p>
+                      )}
+                    </div>
+
+                    <div className="profile-card">
+                      <h4 style={{ color: 'var(--accent-blue)', marginBottom: '0.5rem' }}>Projeler</h4>
+                      {userProjects.length > 0 ? (
+                        <ul className="profile-list">
+                          {userProjects.map((p) => (
+                            <li key={p.projectId}>
+                              <span className="badge badge-active">{p.projectName}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="empty-msg" style={{ fontSize: '0.85rem' }}>Proje atanmamış.</p>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* B. Bildirimler Bölümü */}
+                {/* B. TOPLANTI TAKVIMI (Kişiye Özel) */}
+                <div className="section">
+                  <h2>Toplantı Takvimi</h2>
+                  <div className="calendar-grid">
+                    {getCalendarDays().map((day) => {
+                      const iso = day.toISOString().split('T')[0];
+                      const status = dayStatus(day);
+                      const meetingsOnDay = dayMeetings(day);
+                      const statusClass =
+                        status === 'attended' ? 'calendar-day-attended' :
+                        status === 'missed' ? 'calendar-day-missed' :
+                        status === 'upcoming' ? 'calendar-day-upcoming' : '';
+                      return (
+                        <div key={iso} className={`calendar-day ${statusClass}`}>
+                          <div className="calendar-date">
+                            <span className="calendar-day-num">{day.getDate()}</span>
+                            <span className="calendar-month">
+                              {day.toLocaleDateString('tr-TR', { month: 'short' })}
+                            </span>
+                            <span className="calendar-year">{day.getFullYear()}</span>
+                          </div>
+                          {status !== 'none' && (
+                            <div className="calendar-meetings">
+                              {meetingsOnDay.map((m) => (
+                                <div key={m.id} className="calendar-meeting-dot" title={m.title}>
+                                  {m.title}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* C. YAPACAK GÖREVLER */}
+                <div className="section">
+                  <div className="section-header">
+                    <h2>Yapılacak Görevler</h2>
+                  </div>
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr><th>Görev</th><th>Açıklama</th><th>Bitiş</th><th>Öncelik</th><th>Durum</th></tr>
+                      </thead>
+                      <tbody>
+                        {userTasks.length === 0 && (
+                          <tr><td colSpan={5} className="empty-msg">Henüz görev yok.</td></tr>
+                        )}
+                        {userTasks.map((t) => (
+                          <tr key={t.id}>
+                            <td>{t.title}</td>
+                            <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t.description || '-'}</td>
+                            <td>{t.dueDate || '-'}</td>
+                            <td>
+                              <span className={`badge ${t.priority === 'high' ? 'badge-active' : 'badge-inactive'}`}>
+                                {t.priority}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`badge ${t.status === 'completed' ? 'badge-active' : 'badge-inactive'}`}>
+                                {t.status === 'completed' ? 'Tamamlandı' : 'Bekliyor'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="form-group" style={{ marginTop: '1rem' }}>
+                    <label>Yeni Görev Ekle</label>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <input
+                        className="search-input"
+                        type="text"
+                        value={newTask.title}
+                        placeholder="Görev başlığı"
+                        onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                      />
+                      <input
+                        className="search-input"
+                        type="date"
+                        value={newTask.dueDate}
+                        onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                      />
+                      <button className="btn btn-sm btn-primary" onClick={addTask}>
+                        Ekle
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* D. GELECEK ETKINLIKLER */}
+                <div className="section">
+                  <h2>Gelecek Etkinlikler</h2>
+                  <div className="card-grid">
+                    {upcomingMeetings.length === 0 && (
+                      <p className="empty-msg">Gelecek etkinlik yok.</p>
+                    )}
+                    {upcomingMeetings.map((m) => {
+                      const didAttend = attendeeMap[m.id]?.some((a) => String(a.id) === String(user.uid));
+                      return (
+                        <div className="card" key={m.id}>
+                          <div className="card-body">
+                            <h3 className="card-title">{m.title}</h3>
+                            <span className="card-date">{new Date(m.date).toLocaleDateString('tr-TR')}</span>
+                            <p className="card-notes" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>{m.gundem || m.notes || '-'}</p>
+                            <span className={`badge ${didAttend ? 'badge-active' : 'badge-inactive'}`} style={{ marginTop: '0.5rem', display: 'inline-block' }}>
+                              {didAttend ? 'Katılımınız Onaylandı' : 'Henüz Onaylanmadı'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* E. KATILDIĞI ETKINLIKLER */}
+                <div className="section">
+                  <h2>Katıldığım Etkinlikler</h2>
+                  <div className="card-grid">
+                    {attendedMeetings.length === 0 && (
+                      <p className="empty-msg">Henüz hiçbir etkinliğe katılmadınız.</p>
+                    )}
+                    {attendedMeetings.map((m) => (
+                      <div className="card" key={m.id}>
+                        <div className="card-body">
+                          <h3 className="card-title">{m.title}</h3>
+                          <span className="card-date">{new Date(m.date).toLocaleDateString('tr-TR')}</span>
+                          <span className="badge badge-active">✓ Katıldınız</span>
+                          <p className="card-notes" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', whiteSpace: 'pre-wrap', marginTop: '0.5rem' }}>{m.kararlar || m.notes || '-'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* F. BİLDİRİMLER */}
                 <div className="section">
                   <div className="section-header">
                     <h2>Bildirimler {unreadNotifCount > 0 && <span className="tab-badge" style={{ background: 'var(--danger)', display: 'inline-block' }}>{unreadNotifCount}</span>}</h2>
                     {notifs.length > 0 && (
                       <div className="section-header-right">
-                        <button className="btn btn-sm btn-danger" onClick={handleClearNotifs}>Bildirimleri Temizle</button>
+                        <button className="btn btn-sm btn-danger" onClick={handleClearNotifs}>Temizle</button>
                       </div>
                     )}
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '250px', overflowY: 'auto', paddingRight: '0.25rem' }}>
                     {notifs.length === 0 ? (
                       <p className="empty-msg" style={{ padding: '2rem 0' }}>Hiç bildiriminiz yok.</p>
                     ) : (

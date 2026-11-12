@@ -290,3 +290,112 @@ export const markNotifRead = (uid, notifId) => {
 export const clearNotifs = (uid) => {
   localStorage.setItem(NOTIF_KEY(uid), '[]');
 };
+
+/* =========================================================
+ * DEPARTMANLAR
+ * ========================================================= */
+
+export const getDepartmentsFS = async () => {
+  const s = await getDocs(collection(db, 'departments'));
+  return s.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const addDepartmentFS = async (name) => {
+  const ref = await addDoc(collection(db, 'departments'), { name: name.trim(), createdAt: serverTimestamp() });
+  return { id: ref.id, name: name.trim() };
+};
+
+export const deleteDepartmentFS = async (id) => {
+  await deleteDoc(doc(db, 'departments', String(id)));
+};
+
+/* =========================================================
+ * PROJELER
+ * ========================================================= */
+
+export const getProjectsFS = async () => {
+  const s = await getDocs(collection(db, 'projects'));
+  return s.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const addProjectFS = async (name, departmentId = null) => {
+  const data = { name: name.trim(), departmentId, createdAt: serverTimestamp() };
+  const ref = await addDoc(collection(db, 'projects'), data);
+  return { id: ref.id, ...data };
+};
+
+export const deleteProjectFS = async (id) => {
+  await deleteDoc(doc(db, 'projects', String(id)));
+};
+
+/* =========================================================
+ * KULLANICI - DEPARTMAN (çoka-çok)
+ * ========================================================= */
+
+export const getUserDepartmentsFS = async () => {
+  const s = await getDocs(collection(db, 'userDepartments'));
+  return s.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const addUserDepartmentFS = async (uid, departmentId) => {
+  await setDoc(doc(db, 'userDepartments', `${uid}_${departmentId}`), { uid, departmentId, createdAt: serverTimestamp() });
+};
+
+export const removeUserDepartmentFS = async (uid, departmentId) => {
+  await deleteDoc(doc(db, 'userDepartments', `${uid}_${departmentId}`));
+};
+
+/* =========================================================
+ * KULLANICI - PROJE (çoka-çok)
+ * ========================================================= */
+
+export const getUserProjectsFS = async () => {
+  const s = await getDocs(collection(db, 'userProjects'));
+  return s.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const addUserProjectFS = async (uid, projectId) => {
+  await setDoc(doc(db, 'userProjects', `${uid}_${projectId}`), { uid, projectId, createdAt: serverTimestamp() });
+};
+
+export const removeUserProjectFS = async (uid, projectId) => {
+  await deleteDoc(doc(db, 'userProjects', `${uid}_${projectId}`));
+};
+
+/* =========================================================
+ * GÖREVLER (Kişiye özel to-do)
+ * ========================================================= */
+
+export const getTasksFS = async () => {
+  const s = await getDocs(collection(db, 'tasks'));
+  return s.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const addTaskFS = async (task) => {
+  const data = {
+    userId: task.userId,
+    title: task.title.trim(),
+    description: task.description.trim(),
+    dueDate: task.dueDate || '',
+    priority: task.priority || 'medium',
+    status: 'pending',
+    createdAt: serverTimestamp(),
+  };
+  const ref = await addDoc(collection(db, 'tasks'), data);
+  return { id: ref.id, ...data };
+};
+
+export const updateTaskFS = async (id, updates) => {
+  await updateDoc(doc(db, 'tasks', String(id)), updates);
+  return { id, ...updates };
+};
+
+export const deleteTaskFS = async (id) => {
+  await deleteDoc(doc(db, 'tasks', String(id)));
+};
+
+export const getUserTasksFS = async (uid) => {
+  const q = query(collection(db, 'tasks'), where('userId', '==', uid));
+  const s = await getDocs(q);
+  return s.docs.map((d) => ({ id: d.id, ...d.data() }));
+};

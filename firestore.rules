@@ -20,6 +20,11 @@ rules_version = '2';
 //   /attendance/{aid}      = { meetingId, memberId }
 //   /greyList/{memberId}   = gri liste kaydi
 //   /logPermissions/{permId}= { targetUid, date, grantedBy } — id = "uid_YYYY-MM-DD"
+//   /departments/{docId}    = departman (name)
+//   /projects/{docId}       = proje (name, departmentId)
+//   /userDepartments/{docId}= { uid, departmentId } — id = "uid_departmentId"
+//   /userProjects/{docId}   = { uid, projectId } — id = "uid_projectId"
+//   /tasks/{docId}         = { userId, title, description, dueDate, priority, status }
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -102,6 +107,43 @@ service cloud.firestore {
     match /config/{docId} {
       allow read: if isUser();
       allow write: if isAdmin();
+    }
+
+    // ---------- DEPARTMENTS ----------
+    match /departments/{docId} {
+      allow read: if isUser();
+      allow write: if isAdmin();
+    }
+
+    // ---------- PROJECTS ----------
+    match /projects/{docId} {
+      allow read: if isUser();
+      allow write: if isAdmin();
+    }
+
+    // ---------- USER DEPARTMENTS ----------
+    match /userDepartments/{docId} {
+      allow read: if isUser();
+      allow create, update, delete: if isAdmin()
+                                    || (isSignedIn() && uid() == request.resource.data.uid);
+    }
+
+    // ---------- USER PROJECTS ----------
+    match /userProjects/{docId} {
+      allow read: if isUser();
+      allow create, update, delete: if isAdmin()
+                                    || (isSignedIn() && uid() == request.resource.data.uid);
+    }
+
+    // ---------- TASKS (Görevler) ----------
+    match /tasks/{docId} {
+      allow read: if isUser();
+      allow create: if isSignedIn() && uid() == request.resource.data.userId;
+      allow update: if isSignedIn() && (
+        uid() == request.resource.data.userId || isAdmin()
+      );
+      allow delete: if isAdmin()
+                    || (isSignedIn() && uid() == request.resource.data.userId);
     }
 
     // ---------- BUGUNUN LOG TUTUCUSU MU? ----------
