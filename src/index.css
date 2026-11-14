@@ -924,6 +924,19 @@ body {
 
 /* ---- RESPONSIVE ---- */
 @media (max-width: 640px) {
+  .header-account-actions {
+    position: static !important;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+
+  .header-account-actions > div {
+    max-width: 100%;
+    text-align: center !important;
+    overflow-wrap: anywhere;
+  }
+
   .header-title {
     font-size: 1.6rem;
   }
@@ -1425,4 +1438,226 @@ body {
   border-radius: 6px;
   padding: 0.35rem 0.75rem;
   font-size: 0.85rem;
+}
+
+.profile-header {
+  background: linear-gradient(135deg, #1a1333 0%, #0d1117 60%, #0a1a2e 100%);
+  border-bottom: 1px solid var(--border-color);
+  padding: 1.5rem 1rem;
+}
+
+.profile-header-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.profile-header h1 {
+  font-size: 1.8rem;
+  color: var(--text-primary);
+}
+
+.profile-eyebrow {
+  color: var(--accent-purple);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.profile-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.profile-content {
+  max-width: 1160px;
+}
+
+.profile-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.profile-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.profile-email {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.profile-role {
+  margin-top: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+}
+
+.profile-department-heading {
+  color: var(--accent-purple);
+  margin-bottom: 0.5rem;
+}
+
+.profile-project-heading {
+  color: var(--accent-blue);
+  margin-bottom: 0.5rem;
+}
+
+.profile-empty {
+  padding: 1rem 0;
+  font-size: 0.85rem;
+}
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.calendar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.calendar-legend-dot {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+}
+
+.profile-calendar {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  max-height: 560px;
+  overflow-y: auto;
+  padding: 0.25rem;
+}
+
+.profile-calendar .calendar-day {
+  min-width: 0;
+}
+
+.profile-task-form {
+  margin-top: 1rem;
+}
+
+.profile-task-form > label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.profile-task-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.profile-task-fields .search-input {
+  flex: 1 1 180px;
+}
+
+.profile-task-description {
+  font-size: 0.85rem;
+  color: var(--text-secondary) !important;
+}
+
+.profile-notif-count {
+  margin-left: 0.4rem;
+}
+
+.profile-notifications {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.profile-notification {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.profile-notification:hover {
+  border-color: var(--accent-blue);
+}
+
+.profile-notification-read {
+  opacity: 0.7;
+}
+
+.profile-notification-message {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-notification-message > span,
+.profile-notification-message small {
+  display: block;
+}
+
+.profile-notification-message small {
+  margin-top: 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.profile-notification-unread {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+}
+
+.profile-header-badge {
+  margin-left: 0.4rem;
+  background: var(--accent-blue);
+}
+
+@media (max-width: 640px) {
+  .profile-header-inner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .profile-header h1 {
+    font-size: 1.55rem;
+  }
+
+  .profile-calendar {
+    gap: 0.3rem;
+  }
+
+  .profile-calendar .calendar-day {
+    min-height: 64px;
+    padding: 0.25rem;
+  }
 }

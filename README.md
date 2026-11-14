@@ -13,6 +13,7 @@ GitHub Pages üzerinden otomatik dağıtım yapılır — `main` dalına her pus
 - **Gri Liste**: Son 3 toplantıya üst üste katılmayan üyeler otomatik gri listeye alınır.
 - **Koyu Tema**: Modern, bilişim topluluğuna uygun koyu tema (neon mavi/mor).
 - **Takvim Görünümü**: Toplantılar aylık takvim formatında.
+- **Bağımsız Profil Sayfası**: Hesap bilgileri, departman ve projeler, kişisel görevler, toplantı takvimi ve bildirimler ayrı bir profil sayfasında.
 - **Firebase Entegrasyonu**: Birden çok kullanıcı aynı anda log tutabilir.
 
 ## GitHub Secrets (Zorunlu)

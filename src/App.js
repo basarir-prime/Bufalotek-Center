@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './authContext';
 import * as fs from './firestoreService';
+import ProfilePage from './ProfilePage';
 
-// Bugünü YYYY-MM-DD formatında al
-const getTodayISO = () => {
-  return new Date().toISOString().split('T')[0];
-};
+const VALID_PAGES = ['meetings', 'grey-list', 'departments', 'calendar', 'profile', 'admin-panel', 'new-meeting', 'new-member'];
+
+const getDateISO = (date = new Date()) => (
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+);
+
+const getTodayISO = () => getDateISO();
 
 function App() {
   const { user, role, loading, isAdmin } = useAuth();
@@ -19,9 +23,17 @@ function App() {
 
   const [page, setPage] = useState(() => {
     const hash = window.location.hash.replace('#', '');
-    const validPages = ['meetings', 'grey-list', 'departments', 'calendar', 'profile', 'admin-panel', 'new-meeting', 'new-member'];
-    return validPages.includes(hash) ? hash : 'profile';
+    return VALID_PAGES.includes(hash) ? hash : 'profile';
   });
+  const navigateTo = (nextPage) => {
+    if (!VALID_PAGES.includes(nextPage)) return;
+    setPage(nextPage);
+    if (window.location.hash !== `#${nextPage}`) window.location.hash = nextPage;
+    if (nextPage === 'departments') {
+      setDeptViewMode('list');
+      setSelectedDepartment(null);
+    }
+  };
   const [loadingData, setLoadingData] = useState(true);
   const [globalError, setGlobalError] = useState('');
 
@@ -105,8 +117,6 @@ function App() {
   };
 
   const getDeptIcon = (iconName) => DEPT_ICONS[iconName] || DEPT_ICONS.project;
-  const [newTask, setNewTask] = useState({ title: '', dueDate: '' });
-
   /* =========================================================
    * BİLDİRİM OKUMA / YAZMA
    * ========================================================= */
@@ -144,14 +154,13 @@ function App() {
     setLoadingData(true);
     setGlobalError('');
     try {
-      const [mems, meets, atts, greys, perms, usersSnap, freshDeps, projs, userDeps, userProjs, userTsks] = await Promise.all([
+      const [mems, meets, atts, greys, perms, usersSnap, projs, userDeps, userProjs, userTsks] = await Promise.all([
         fs.getMembersFS(),
         fs.getMeetingsFS(),
         fs.getAttendanceFS(),
         fs.getGreyListFS(),
         fs.getLogPermissionsForDate(getTodayISO()),
         fs.getUsersFS(),
-        fs.getDepartmentsFS(),
         fs.getProjectsFS(),
         fs.getUserDepartmentsFS(),
         fs.getUserProjectsFS(),
@@ -168,6 +177,7 @@ function App() {
 
       // Departmanları başlat (ilk kurulumda)
       await fs.initDepartmentsFS();
+      const freshDeps = await fs.getDepartmentsFS();
 
       // Güncel members listesini tekrar çek
       const updatedMems = await fs.getMembersFS();
@@ -227,9 +237,8 @@ function App() {
   // Hash değişikliğini dinle (a etiketleriyle sayfa geçişi)
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '');
-      const validPages = ['meetings', 'grey-list', 'departments', 'calendar', 'profile', 'admin-panel', 'new-meeting', 'new-member'];
-      if (validPages.includes(hash)) {
+      const hash = window.location.hash.replace('#', '') || 'profile';
+      if (VALID_PAGES.includes(hash)) {
         setPage(hash);
         if (hash === 'departments') {
           setDeptViewMode('list');
@@ -356,7 +365,7 @@ function App() {
       setMeetingError('');
       await refreshAllData();
       refreshNotifs();
-      setPage('meetings');
+      navigateTo('meetings');
     } catch (err) {
       setMeetingError('Toplantı kaydedilirken hata: ' + (err?.message || ''));
     } finally {
@@ -378,7 +387,7 @@ function App() {
       gorevler: m.gorevler || '',
     });
     setMeetingError('');
-    setPage('new-meeting');
+    navigateTo('new-meeting');
   };
 
   const cancelEditMeeting = () => {
@@ -386,7 +395,7 @@ function App() {
     setMeetingForm({ title: '', date: getTodayISO(), gundem: '', kararlar: '', gorevler: '' });
     setMeetingError('');
     setNewMeetingAttendees([]);
-    setPage('meetings');
+    navigateTo('meetings');
   };
 
   const deleteMeeting = async (id, title) => {
@@ -515,23 +524,20 @@ function App() {
     }
   };
 
-  const addTask = async () => {
-    if (!newTask.title.trim()) return;
+  const addTask = async (task) => {
+    if (!task.title.trim()) return false;
     setBusy(true);
     try {
       await fs.addTaskFS({
         userId: user.uid,
-        title: newTask.title,
+        title: task.title,
         description: '',
-        dueDate: newTask.dueDate,
+        dueDate: task.dueDate,
         priority: 'medium',
         status: 'pending',
       });
-      setNewTask({ title: '', dueDate: '' });
-      setUserTasks([...userTasks, {}]); // placeholder, refresh will update
-      await fs.getUserTasksFS(user.uid).then(setUserTasks);
-    } catch (e) {
-      alert('Görev eklenemedi: ' + e.message);
+      setUserTasks(await fs.getUserTasksFS(user.uid));
+      return true;
     } finally {
       setBusy(false);
     }
@@ -578,12 +584,12 @@ function App() {
   };
 
   const dayMeetings = (date) => {
-    const ds = date.toISOString().split('T')[0];
+    const ds = getDateISO(date);
     return meetings.filter((m) => m.date === ds);
   };
 
   const dayStatus = (date) => {
-    const ds = date.toISOString().split('T')[0];
+    const ds = getDateISO(date);
     const ms = meetings.filter((m) => m.date === ds);
     if (ms.length === 0) return 'none';
     // Bugün veya gelecekse: planlı
@@ -627,15 +633,46 @@ function App() {
     return <AuthScreen />;
   }
 
+  if (page === 'profile') {
+    return (
+      <ProfilePage
+        user={user}
+        role={role}
+        userDepartments={userDepartments}
+        userProjects={userProjects}
+        calendarDays={getCalendarDays()}
+        dayStatus={dayStatus}
+        dayMeetings={dayMeetings}
+        userTasks={userTasks}
+        onAddTask={addTask}
+        busy={busy}
+        upcomingMeetings={upcomingMeetings}
+        attendedMeetings={attendedMeetings}
+        attendeeMap={attendeeMap}
+        notifs={notifs}
+        unreadNotifCount={unreadNotifCount}
+        onMarkNotifRead={handleMarkNotifRead}
+        onClearNotifs={handleClearNotifs}
+        onNavigate={navigateTo}
+        onSignOut={fs.signOutFS}
+        loading={loadingData}
+        error={globalError}
+      />
+    );
+  }
+
   return (
     <div className="app">
       {/* ---- HEADER ---- */}
       <header className="header">
-        <div style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div className="header-account-actions" style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{user.displayName || 'Kullanıcı'}</div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user.email} | <span style={{ color: 'var(--accent-blue)', fontWeight: 600, textTransform: 'uppercase' }}>{role || 'user'}</span></div>
           </div>
+          <button className="btn btn-sm" onClick={() => navigateTo('profile')}>
+            Profilim{unreadNotifCount > 0 && <span className="tab-badge profile-header-badge">{unreadNotifCount}</span>}
+          </button>
           <button className="btn btn-sm btn-danger" onClick={() => fs.signOutFS()}>Çıkış Yap</button>
         </div>
         <h1 className="header-title">Bufalotek Center</h1>
@@ -668,7 +705,7 @@ function App() {
 
       {/* ---- GREY LIST ALERT BANNER ---- */}
       {greyList.length > 0 && (
-        <div className="alert-banner" onClick={() => setPage('grey-list')} role="button" tabIndex={0}>
+        <div className="alert-banner" onClick={() => navigateTo('grey-list')} role="button" tabIndex={0}>
           <span className="alert-icon">⚠</span>
           <span className="alert-text">
             <strong>Sistem Uyarısı:</strong> {greyList.length} üye son 3 toplantıya üst üste katılmadı, gri listeye alındı.
@@ -696,43 +733,36 @@ function App() {
           <a
             href="#meetings"
             className={`tab ${page === 'meetings' ? 'tab-active' : ''}`}
-            onClick={(e) => { e.preventDefault(); setPage('meetings'); }}
+            onClick={(e) => { e.preventDefault(); navigateTo('meetings'); }}
           >
             Toplantılar
           </a>
           <a
             href="#grey-list"
             className={`tab ${page === 'grey-list' ? 'tab-active' : ''}`}
-            onClick={(e) => { e.preventDefault(); setPage('grey-list'); }}
+            onClick={(e) => { e.preventDefault(); navigateTo('grey-list'); }}
           >
             Gri Liste{greyList.length > 0 && <span className="tab-badge">{greyList.length}</span>}
           </a>
           <a
             href="#departments"
             className={`tab ${page === 'departments' ? 'tab-active' : ''}`}
-            onClick={(e) => { e.preventDefault(); setPage('departments'); setDeptViewMode('list'); setSelectedDepartment(null); }}
+            onClick={(e) => { e.preventDefault(); navigateTo('departments'); }}
           >
             Departmanlar
           </a>
           <a
             href="#calendar"
             className={`tab ${page === 'calendar' ? 'tab-active' : ''}`}
-            onClick={(e) => { e.preventDefault(); setPage('calendar'); }}
+            onClick={(e) => { e.preventDefault(); navigateTo('calendar'); }}
           >
             Takvim
-          </a>
-          <a
-            href="#profile"
-            className={`tab ${page === 'profile' ? 'tab-active' : ''}`}
-            onClick={(e) => { e.preventDefault(); setPage('profile'); }}
-          >
-            Profil{unreadNotifCount > 0 && <span className="tab-badge" style={{ background: 'var(--accent-blue)' }}>{unreadNotifCount}</span>}
           </a>
           {isAdmin && (
             <a
               href="#admin-panel"
               className={`tab ${page === 'admin-panel' ? 'tab-active' : ''}`}
-              onClick={(e) => { e.preventDefault(); setPage('admin-panel'); }}
+              onClick={(e) => { e.preventDefault(); navigateTo('admin-panel'); }}
             >
               Admin Paneli
             </a>
@@ -752,7 +782,7 @@ function App() {
                 <div className="section-header">
                   <h2>Toplantılar</h2>
                   {(isAdmin || hasTodayPermission) && (
-                    <button className="btn btn-primary" onClick={() => setPage('new-meeting')}>
+                    <button className="btn btn-primary" onClick={() => navigateTo('new-meeting')}>
                       + Yeni Toplantı
                     </button>
                   )}
@@ -1055,7 +1085,7 @@ function App() {
                 <h2>Toplantı Takvimi</h2>
                 <div className="calendar-grid">
                   {getCalendarDays().map((day) => {
-                    const iso = day.toISOString().split('T')[0];
+                    const iso = getDateISO(day);
                     const status = dayStatus(day);
                     const meetingsOnDay = dayMeetings(day);
                     const statusClass =
@@ -1085,247 +1115,6 @@ function App() {
                   })}
                 </div>
               </section>
-            )}
-
-            {/* === PROFIL TAB (Kişisel Dashboard) === */}
-            {page === 'profile' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                {/* A. KİŞİSEL BİLGİLER */}
-                <div className="section">
-                  <h2>Kişisel Bilgiler</h2>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', flexWrap: 'wrap' }}>
-                    <div className="profile-card">
-                      <div className="profile-avatar">
-                        {user.displayName ? user.displayName.slice(0, 1).toUpperCase() : 'U'}
-                      </div>
-                      <h3>{user.displayName}</h3>
-                      <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{user.email}</p>
-                      <span className="badge badge-active" style={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.7rem' }}>
-                        {role || 'user'}
-                      </span>
-                    </div>
-
-                    <div className="profile-card">
-                      <h4 style={{ color: 'var(--accent-purple)', marginBottom: '0.5rem' }}>Departmanlar</h4>
-                      {userDepartments.length > 0 ? (
-                        <ul className="profile-list">
-                          {userDepartments.map((d) => (
-                            <li key={d.departmentId}>
-                              <span className="badge badge-active">{d.departmentName}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="empty-msg" style={{ fontSize: '0.85rem' }}>Departman atanmamış.</p>
-                      )}
-                    </div>
-
-                    <div className="profile-card">
-                      <h4 style={{ color: 'var(--accent-blue)', marginBottom: '0.5rem' }}>Projeler</h4>
-                      {userProjects.length > 0 ? (
-                        <ul className="profile-list">
-                          {userProjects.map((p) => (
-                            <li key={p.projectId}>
-                              <span className="badge badge-active">{p.projectName}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="empty-msg" style={{ fontSize: '0.85rem' }}>Proje atanmamış.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* B. TOPLANTI TAKVIMI (Kişiye Özel) */}
-                <div className="section">
-                  <h2>Toplantı Takvimi</h2>
-                  <div className="calendar-grid">
-                    {getCalendarDays().map((day) => {
-                      const iso = day.toISOString().split('T')[0];
-                      const status = dayStatus(day);
-                      const meetingsOnDay = dayMeetings(day);
-                      const statusClass =
-                        status === 'attended' ? 'calendar-day-attended' :
-                        status === 'missed' ? 'calendar-day-missed' :
-                        status === 'upcoming' ? 'calendar-day-upcoming' : '';
-                      return (
-                        <div key={iso} className={`calendar-day ${statusClass}`}>
-                          <div className="calendar-date">
-                            <span className="calendar-day-num">{day.getDate()}</span>
-                            <span className="calendar-month">
-                              {day.toLocaleDateString('tr-TR', { month: 'short' })}
-                            </span>
-                            <span className="calendar-year">{day.getFullYear()}</span>
-                          </div>
-                          {status !== 'none' && (
-                            <div className="calendar-meetings">
-                              {meetingsOnDay.map((m) => (
-                                <div key={m.id} className="calendar-meeting-dot" title={m.title}>
-                                  {m.title}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* C. YAPACAK GÖREVLER */}
-                <div className="section">
-                  <div className="section-header">
-                    <h2>Yapılacak Görevler</h2>
-                  </div>
-                  <div className="table-wrap">
-                    <table className="table">
-                      <thead>
-                        <tr><th>Görev</th><th>Açıklama</th><th>Bitiş</th><th>Öncelik</th><th>Durum</th></tr>
-                      </thead>
-                      <tbody>
-                        {userTasks.length === 0 && (
-                          <tr><td colSpan={5} className="empty-msg">Henüz görev yok.</td></tr>
-                        )}
-                        {userTasks.map((t) => (
-                          <tr key={t.id}>
-                            <td>{t.title}</td>
-                            <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t.description || '-'}</td>
-                            <td>{t.dueDate || '-'}</td>
-                            <td>
-                              <span className={`badge ${t.priority === 'high' ? 'badge-active' : 'badge-inactive'}`}>
-                                {t.priority}
-                              </span>
-                            </td>
-                            <td>
-                              <span className={`badge ${t.status === 'completed' ? 'badge-active' : 'badge-inactive'}`}>
-                                {t.status === 'completed' ? 'Tamamlandı' : 'Bekliyor'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="form-group" style={{ marginTop: '1rem' }}>
-                    <label>Yeni Görev Ekle</label>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <input
-                        className="search-input"
-                        type="text"
-                        value={newTask.title}
-                        placeholder="Görev başlığı"
-                        onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                      />
-                      <input
-                        className="search-input"
-                        type="date"
-                        value={newTask.dueDate}
-                        onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-                      />
-                      <button className="btn btn-sm btn-primary" onClick={addTask}>
-                        Ekle
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* D. GELECEK ETKINLIKLER */}
-                <div className="section">
-                  <h2>Gelecek Etkinlikler</h2>
-                  <div className="card-grid">
-                    {upcomingMeetings.length === 0 && (
-                      <p className="empty-msg">Gelecek etkinlik yok.</p>
-                    )}
-                    {upcomingMeetings.map((m) => {
-                      const didAttend = attendeeMap[m.id]?.some((a) => String(a.id) === String(user.uid));
-                      return (
-                        <div className="card" key={m.id}>
-                          <div className="card-body">
-                            <h3 className="card-title">{m.title}</h3>
-                            <span className="card-date">{new Date(m.date).toLocaleDateString('tr-TR')}</span>
-                            <p className="card-notes" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>{m.gundem || m.notes || '-'}</p>
-                            <span className={`badge ${didAttend ? 'badge-active' : 'badge-inactive'}`} style={{ marginTop: '0.5rem', display: 'inline-block' }}>
-                              {didAttend ? 'Katılımınız Onaylandı' : 'Henüz Onaylanmadı'}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* E. KATILDIĞI ETKINLIKLER */}
-                <div className="section">
-                  <h2>Katıldığım Etkinlikler</h2>
-                  <div className="card-grid">
-                    {attendedMeetings.length === 0 && (
-                      <p className="empty-msg">Henüz hiçbir etkinliğe katılmadınız.</p>
-                    )}
-                    {attendedMeetings.map((m) => (
-                      <div className="card" key={m.id}>
-                        <div className="card-body">
-                          <h3 className="card-title">{m.title}</h3>
-                          <span className="card-date">{new Date(m.date).toLocaleDateString('tr-TR')}</span>
-                          <span className="badge badge-active">✓ Katıldınız</span>
-                          <p className="card-notes" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', whiteSpace: 'pre-wrap', marginTop: '0.5rem' }}>{m.kararlar || m.notes || '-'}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* F. BİLDİRİMLER */}
-                <div className="section">
-                  <div className="section-header">
-                    <h2>Bildirimler {unreadNotifCount > 0 && <span className="tab-badge" style={{ background: 'var(--danger)', display: 'inline-block' }}>{unreadNotifCount}</span>}</h2>
-                    {notifs.length > 0 && (
-                      <div className="section-header-right">
-                        <button className="btn btn-sm btn-danger" onClick={handleClearNotifs}>Temizle</button>
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '250px', overflowY: 'auto', paddingRight: '0.25rem' }}>
-                    {notifs.length === 0 ? (
-                      <p className="empty-msg" style={{ padding: '2rem 0' }}>Hiç bildiriminiz yok.</p>
-                    ) : (
-                      notifs.map((n) => {
-                        let icon = 'ℹ️';
-                        let borderStyle = '1px solid var(--border-color)';
-                        if (n.type === 'warning') { icon = '⚠️'; borderStyle = '1px solid var(--warn-border)'; }
-                        if (n.type === 'meeting') { icon = '📅'; borderStyle = '1px solid rgba(88,166,255,0.4)'; }
-                        return (
-                          <div
-                            key={n.id}
-                            onClick={() => handleMarkNotifRead(n.id)}
-                            style={{
-                              background: n.read ? 'var(--bg-tertiary)' : 'var(--bg-elevated)',
-                              border: borderStyle,
-                              borderRadius: '8px',
-                              padding: '0.75rem 1rem',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.75rem',
-                              cursor: 'pointer',
-                              opacity: n.read ? 0.7 : 1,
-                              transition: 'all 0.15s'
-                            }}
-                          >
-                            <span style={{ fontSize: '1.25rem' }}>{icon}</span>
-                            <div style={{ flex: 1 }}>
-                              <p style={{ fontSize: '0.9rem', color: 'var(--text-primary)', margin: 0, fontWeight: n.read ? 'normal' : 'bold' }}>{n.message}</p>
-                              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{new Date(n.created).toLocaleString('tr-TR')}</span>
-                            </div>
-                            {!n.read && (
-                              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-blue)' }} title="Okunmadı" />
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              </div>
             )}
 
             {/* === DEPARTMANLAR LISTESİ === */}
