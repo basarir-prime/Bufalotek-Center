@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Sidebar from './Sidebar';
 
 const formatDate = (date) => new Date(`${date}T00:00:00`).toLocaleDateString('tr-TR');
 
@@ -22,6 +23,8 @@ const ProfilePage = ({
   onClearNotifs,
   onNavigate,
   onSignOut,
+  isAdmin,
+  greyListCount,
   loading,
   error,
 }) => {
@@ -45,19 +48,21 @@ const ProfilePage = ({
   };
 
   return (
-    <div className="app profile-page">
-      <header className="profile-header">
-        <div className="profile-header-inner">
-          <div>
-            <p className="profile-eyebrow">Bufalotek Center</p>
-            <h1>Profilim</h1>
-            <p className="header-sub">Topluluk hesabınız ve kişisel etkinlikleriniz</p>
-          </div>
-          <div className="profile-header-actions">
-            <button className="btn" onClick={() => onNavigate('meetings')}>Topluluğa Dön</button>
-            <button className="btn btn-danger" onClick={onSignOut}>Çıkış Yap</button>
-          </div>
-        </div>
+    <div className="app app-shell profile-page">
+      <Sidebar
+        user={user}
+        role={role}
+        activePage="profile"
+        onNavigate={onNavigate}
+        onSignOut={onSignOut}
+        isAdmin={isAdmin}
+        greyListCount={greyListCount}
+        unreadNotifCount={unreadNotifCount}
+      />
+      <div className="app-main">
+      <header className="workspace-header">
+        <div><p className="profile-eyebrow">KİŞİSEL ALAN</p><h1>Profilim</h1><p className="header-sub">Topluluk hesabın ve kişisel etkinliklerin</p></div>
+        <button className="btn" onClick={() => onNavigate('meetings')}>Topluluğa Dön <span aria-hidden="true">→</span></button>
       </header>
 
       <main className="main-content profile-content">
@@ -258,6 +263,7 @@ const ProfilePage = ({
       <footer className="footer">
         <p>Bufalotek Center &copy; {new Date().getFullYear()} — Firebase Firestore tabanlı, Rol Yetkilendirmeli</p>
       </footer>
+      </div>
     </div>
   );
 };

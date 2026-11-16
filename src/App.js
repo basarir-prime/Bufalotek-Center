@@ -3,6 +3,7 @@ import { useAuth } from './authContext';
 import * as fs from './firestoreService';
 import HomePage from './HomePage';
 import ProfilePage from './ProfilePage';
+import Sidebar from './Sidebar';
 import DepartmentAdminPanel, { DepartmentPresidentAssignments } from './DepartmentAdminPanel';
 
 const VALID_PAGES = ['home', 'meetings', 'grey-list', 'departments', 'calendar', 'profile', 'admin-panel', 'new-meeting', 'new-member'];
@@ -705,6 +706,10 @@ function App() {
     return (
       <HomePage
         user={user}
+        role={role}
+        isAdmin={isAdmin}
+        greyListCount={greyList.length}
+        unreadNotifCount={unreadNotifCount}
         onNavigate={navigateTo}
         onSignOut={fs.signOutFS}
       />
@@ -729,6 +734,8 @@ function App() {
         attendeeMap={attendeeMap}
         notifs={notifs}
         unreadNotifCount={unreadNotifCount}
+        isAdmin={isAdmin}
+        greyListCount={greyList.length}
         onMarkNotifRead={handleMarkNotifRead}
         onClearNotifs={handleClearNotifs}
         onNavigate={navigateTo}
@@ -740,21 +747,25 @@ function App() {
   }
 
   return (
-    <div className="app">
+    <div className="app app-shell">
+      <Sidebar
+        user={user}
+        role={role}
+        activePage={page}
+        onNavigate={navigateTo}
+        onSignOut={fs.signOutFS}
+        isAdmin={isAdmin}
+        greyListCount={greyList.length}
+        unreadNotifCount={unreadNotifCount}
+      />
+      <div className="app-main">
       {/* ---- HEADER ---- */}
       <header className="header">
-        <div className="header-account-actions" style={{ position: 'absolute', top: '1rem', right: '1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{user.displayName || 'Kullanıcı'}</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user.email} | <span style={{ color: 'var(--accent-blue)', fontWeight: 600, textTransform: 'uppercase' }}>{role || 'user'}</span></div>
-          </div>
-          <button className="btn btn-sm" onClick={() => navigateTo('profile')}>
-            Profilim{unreadNotifCount > 0 && <span className="tab-badge profile-header-badge">{unreadNotifCount}</span>}
-          </button>
-          <button className="btn btn-sm btn-danger" onClick={() => fs.signOutFS()}>Çıkış Yap</button>
+        <div><p className="profile-eyebrow">BUFALOTEK CENTER</p><p className="header-sub">Bilişim Topluluğu</p></div>
+        <div className="header-account-actions">
+          <span className="header-user-name">{user.displayName || user.email}</span>
+          <span className="header-role">{role || 'user'}</span>
         </div>
-        <h1 className="header-title">Bufalotek Center</h1>
-        <p className="header-sub">Bilişim Topluluğu — Toplantı Log Sistemi</p>
       </header>
 
       {/* ---- CANLI İZİN BİLDİRİMİ ---- */}
@@ -800,6 +811,18 @@ function App() {
 
       {/* ---- SEARCH + TABS ---- */}
       <div className="toolbar">
+        <div className="toolbar-heading">
+          <p className="profile-eyebrow">TOPLULUK ALANI</p>
+          <h1>{({
+            meetings: 'Toplantılar',
+            'grey-list': 'Gri Liste',
+            departments: 'Departmanlar',
+            calendar: 'Toplantı Takvimi',
+            'admin-panel': 'Yönetim Merkezi',
+            'new-meeting': editingMeeting ? 'Toplantıyı Düzenle' : 'Yeni Toplantı',
+            'new-member': 'Yeni Üye',
+          })[page] || 'Topluluk'}</h1>
+        </div>
         <input
           className="search-input"
           type="text"
@@ -807,52 +830,6 @@ function App() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="tabs">
-          <a
-            href="#home"
-            className={`tab ${page === 'home' ? 'tab-active' : ''}`}
-            onClick={(e) => { e.preventDefault(); navigateTo('home'); }}
-          >
-            Ana Sayfa
-          </a>
-          <a
-            href="#meetings"
-            className={`tab ${page === 'meetings' ? 'tab-active' : ''}`}
-            onClick={(e) => { e.preventDefault(); navigateTo('meetings'); }}
-          >
-            Toplantılar
-          </a>
-          <a
-            href="#grey-list"
-            className={`tab ${page === 'grey-list' ? 'tab-active' : ''}`}
-            onClick={(e) => { e.preventDefault(); navigateTo('grey-list'); }}
-          >
-            Gri Liste{greyList.length > 0 && <span className="tab-badge">{greyList.length}</span>}
-          </a>
-          <a
-            href="#departments"
-            className={`tab ${page === 'departments' ? 'tab-active' : ''}`}
-            onClick={(e) => { e.preventDefault(); navigateTo('departments'); }}
-          >
-            Departmanlar
-          </a>
-          <a
-            href="#calendar"
-            className={`tab ${page === 'calendar' ? 'tab-active' : ''}`}
-            onClick={(e) => { e.preventDefault(); navigateTo('calendar'); }}
-          >
-            Takvim
-          </a>
-          {isAdmin && (
-            <a
-              href="#admin-panel"
-              className={`tab ${page === 'admin-panel' ? 'tab-active' : ''}`}
-              onClick={(e) => { e.preventDefault(); navigateTo('admin-panel'); }}
-            >
-              Admin Paneli
-            </a>
-          )}
-        </div>
       </div>
 
       {/* ---- CONTENT ---- */}
@@ -1489,6 +1466,7 @@ function App() {
       <footer className="footer">
         <p>Bufalotek Center &copy; {new Date().getFullYear()} — Firebase Firestore tabanlı, Rol Yetkilendirmeli</p>
       </footer>
+      </div>
     </div>
   );
 }

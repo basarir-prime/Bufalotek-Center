@@ -1,61 +1,68 @@
 import React from 'react';
+import Sidebar from './Sidebar';
 
-const HomePage = ({ user, onNavigate, onSignOut }) => {
+const HomePage = ({ user, role, isAdmin, greyListCount, unreadNotifCount, onNavigate, onSignOut }) => {
   const name = user.displayName?.trim() || user.email?.split('@')[0] || 'Kullanıcı';
 
   return (
-    <div className="app home-page">
-      <header className="home-header">
-        <div className="home-header-inner">
-          <div className="home-brand">
-            <p className="profile-eyebrow">Bufalotek Center</p>
-            <span>Bilişim Topluluğu</span>
-          </div>
-          <div className="profile-header-actions">
-            <button className="btn" onClick={() => onNavigate('profile')}>Profilim</button>
-            <button className="btn btn-danger" onClick={onSignOut}>Çıkış Yap</button>
-          </div>
-        </div>
-      </header>
+    <div className="app app-shell home-page">
+      <Sidebar
+        user={user}
+        role={role}
+        activePage="home"
+        onNavigate={onNavigate}
+        onSignOut={onSignOut}
+        isAdmin={isAdmin}
+        greyListCount={greyListCount}
+        unreadNotifCount={unreadNotifCount}
+      />
+      <div className="app-main">
+        <header className="workspace-header">
+          <div><p className="profile-eyebrow">TOPLULUK ALANI</p><h1>Genel Bakış</h1></div>
+          <span className="workspace-date">{new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+        </header>
+        <main className="main-content home-content">
+          <section className="home-welcome">
+            <div className="home-welcome-copy">
+              <p className="profile-eyebrow">BUFALOTEK CENTER · BİLİŞİM TOPLULUĞU</p>
+              <h2>Merhaba <span>{name}</span></h2>
+              <p>Topluluk çalışmalarına kaldığın yerden devam et.</p>
+            </div>
+            <span className="home-welcome-mark" aria-hidden="true">B</span>
+          </section>
 
-      <main className="main-content home-content">
-        <section className="home-welcome">
-          <span className="home-welcome-mark" aria-hidden="true">B</span>
-          <p className="profile-eyebrow">Topluluk alanına hoş geldin</p>
-          <h1>Merhaba <span>{name}</span></h1>
-          <p>Bufalotek Center’da devam etmek istediğin yeri seçebilirsin.</p>
-        </section>
-
-        <section className="section home-guide" aria-labelledby="home-guide-title">
-          <div>
-            <p className="profile-eyebrow">Hızlı başlangıç</p>
-            <h2 id="home-guide-title">Nereye gitmek istersin?</h2>
-            <p className="home-guide-description">Kişisel bilgilerine göz at veya topluluk departmanlarını keşfet.</p>
-          </div>
-          <div className="home-shortcut-grid">
-            <article className="home-shortcut-card home-shortcut-profile">
-              <span className="home-shortcut-icon" aria-hidden="true">01</span>
-              <h3>Profilim</h3>
-              <p>Görevlerini, toplantı takvimini, etkinliklerini ve bildirimlerini görüntüle.</p>
-              <button className="btn btn-primary" onClick={() => onNavigate('profile')}>
-                Profilime git <span aria-hidden="true">→</span>
-              </button>
-            </article>
-            <article className="home-shortcut-card home-shortcut-departments">
-              <span className="home-shortcut-icon" aria-hidden="true">02</span>
-              <h3>Departmanlar</h3>
-              <p>Topluluk departmanlarını, ekipleri ve departman projelerini keşfet.</p>
-              <button className="btn btn-primary" onClick={() => onNavigate('departments')}>
-                Departmanları keşfet <span aria-hidden="true">→</span>
-              </button>
-            </article>
-          </div>
-        </section>
-      </main>
-
-      <footer className="footer">
-        <p>Bufalotek Center &copy; {new Date().getFullYear()} — Bilişim Topluluğu</p>
-      </footer>
+          <section className="section home-guide" aria-labelledby="home-guide-title">
+            <div className="section-header home-guide-heading">
+              <div>
+                <p className="profile-eyebrow">HIZLI ERİŞİM</p>
+                <h2 id="home-guide-title">Nereden başlayalım?</h2>
+                <p className="home-guide-description">Kişisel alanına geç veya topluluk ekiplerini keşfet.</p>
+              </div>
+            </div>
+            <div className="home-shortcut-grid">
+              <article className="home-shortcut-card home-shortcut-profile">
+                <span className="home-shortcut-icon" aria-hidden="true">◎</span>
+                <span className="shortcut-kicker">KİŞİSEL ALAN</span>
+                <h3>Profilim</h3>
+                <p>Görevlerini, toplantı takvimini, etkinliklerini ve bildirimlerini tek yerde görüntüle.</p>
+                <button className="btn btn-primary" onClick={() => onNavigate('profile')}>
+                  Profilime git <span aria-hidden="true">→</span>
+                </button>
+              </article>
+              <article className="home-shortcut-card home-shortcut-departments">
+                <span className="home-shortcut-icon" aria-hidden="true">◇</span>
+                <span className="shortcut-kicker">TOPLULUK</span>
+                <h3>Departmanlar</h3>
+                <p>Topluluk ekiplerini, üyeleri ve devam eden projeleri keşfet.</p>
+                <button className="btn btn-primary" onClick={() => onNavigate('departments')}>
+                  Departmanları keşfet <span aria-hidden="true">→</span>
+                </button>
+              </article>
+            </div>
+          </section>
+        </main>
+        <footer className="footer"><p>Bufalotek Center &copy; {new Date().getFullYear()} — Bilişim Topluluğu</p></footer>
+      </div>
     </div>
   );
 };
