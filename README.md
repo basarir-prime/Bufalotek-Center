@@ -12,6 +12,7 @@ GitHub Pages üzerinden otomatik dağıtım yapılır — `main` dalına her pus
 - **Yoklama Sistemi**: Toplantıya gelen üyeleri "Geldi/Gelmedi" olarak işaretleme, yeşil/kırmızı görsel geri bildirim.
 - **Gri Liste**: Son 3 toplantıya üst üste katılmayan üyeler otomatik gri listeye alınır.
 - **Koyu Tema**: Modern, bilişim topluluğuna uygun koyu tema (neon mavi/mor).
+- **Karşılama Ekranı**: Giriş yapan kullanıcıyı adıyla karşılar ve profile/departmanlara hızlı erişim sağlar.
 - **Takvim Görünümü**: Toplantılar aylık takvim formatında.
 - **Bağımsız Profil Sayfası**: Hesap bilgileri, departman ve projeler, kişisel görevler, toplantı takvimi ve bildirimler ayrı bir profil sayfasında.
 - **Departman Başkanları**: Genel başkan, Admin Paneli'nden departman başkanlarını atar. Departman başkanı yalnızca kendi departmanının üye ve projelerini yönetebilir; genel başkan tüm departmanları yönetebilir.

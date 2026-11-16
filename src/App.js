@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './authContext';
 import * as fs from './firestoreService';
+import HomePage from './HomePage';
 import ProfilePage from './ProfilePage';
 import DepartmentAdminPanel, { DepartmentPresidentAssignments } from './DepartmentAdminPanel';
 
-const VALID_PAGES = ['meetings', 'grey-list', 'departments', 'calendar', 'profile', 'admin-panel', 'new-meeting', 'new-member'];
+const VALID_PAGES = ['home', 'meetings', 'grey-list', 'departments', 'calendar', 'profile', 'admin-panel', 'new-meeting', 'new-member'];
 
 const DEPARTMENT_CONFIG = [
   { id: 'proje', name: 'Proje Departmanı', color: '#3b82f6', icon: 'project', desc: 'Proje yönetimi, planlama ve takip işlemleri' },
@@ -34,7 +35,7 @@ function App() {
 
   const [page, setPage] = useState(() => {
     const hash = window.location.hash.replace('#', '');
-    return VALID_PAGES.includes(hash) ? hash : 'profile';
+    return VALID_PAGES.includes(hash) ? hash : 'home';
   });
   const navigateTo = (nextPage) => {
     if (!VALID_PAGES.includes(nextPage)) return;
@@ -240,7 +241,7 @@ function App() {
   // Hash değişikliğini dinle (a etiketleriyle sayfa geçişi)
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '') || 'profile';
+      const hash = window.location.hash.replace('#', '') || 'home';
       if (VALID_PAGES.includes(hash)) {
         setPage(hash);
         if (hash === 'departments') {
@@ -700,6 +701,16 @@ function App() {
     return <AuthScreen />;
   }
 
+  if (page === 'home') {
+    return (
+      <HomePage
+        user={user}
+        onNavigate={navigateTo}
+        onSignOut={fs.signOutFS}
+      />
+    );
+  }
+
   if (page === 'profile') {
     return (
       <ProfilePage
@@ -797,6 +808,13 @@ function App() {
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="tabs">
+          <a
+            href="#home"
+            className={`tab ${page === 'home' ? 'tab-active' : ''}`}
+            onClick={(e) => { e.preventDefault(); navigateTo('home'); }}
+          >
+            Ana Sayfa
+          </a>
           <a
             href="#meetings"
             className={`tab ${page === 'meetings' ? 'tab-active' : ''}`}
