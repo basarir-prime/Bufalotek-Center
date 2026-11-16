@@ -25,3 +25,20 @@ test('uses the account name when the display name is missing', () => {
   render(<HomePage user={{ email: 'deniz@example.com' }} onNavigate={jest.fn()} onSignOut={jest.fn()} />);
   expect(screen.getByRole('heading', { name: 'Merhaba deniz' })).toBeInTheDocument();
 });
+
+test('shows community news and opens the complete news feed', () => {
+  const onNavigate = jest.fn();
+  render(
+    <HomePage
+      user={{ email: 'deniz@example.com' }}
+      news={[{ id: 'news-1', title: 'Topluluk buluşması', body: 'Etkinlik yakında.', departmentId: null }]}
+      departments={[]}
+      onNavigate={onNavigate}
+      onSignOut={jest.fn()}
+    />
+  );
+
+  expect(screen.getByRole('heading', { name: 'Topluluk buluşması' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Tüm haberler/ }));
+  expect(onNavigate).toHaveBeenLastCalledWith('news');
+});

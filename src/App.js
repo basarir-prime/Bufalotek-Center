@@ -4,9 +4,27 @@ import * as fs from './firestoreService';
 import HomePage from './HomePage';
 import ProfilePage from './ProfilePage';
 import Sidebar from './Sidebar';
+import DepartmentPage from './DepartmentPage';
+import NewsBoard from './NewsBoard';
 import DepartmentAdminPanel, { DepartmentPresidentAssignments } from './DepartmentAdminPanel';
 
-const VALID_PAGES = ['home', 'meetings', 'grey-list', 'departments', 'calendar', 'profile', 'admin-panel', 'new-meeting', 'new-member'];
+const VALID_PAGES = ['home', 'meetings', 'grey-list', 'departments', 'calendar', 'profile', 'admin-panel', 'new-meeting', 'new-member', 'news'];
+const isValidPage = (value) => (
+  VALID_PAGES.includes(value) || /^department\/[^/]+$/.test(value)
+);
+const getDepartmentIdFromPage = (value) => {
+  if (!value.startsWith('department/')) return null;
+  try {
+    return decodeURIComponent(value.slice('department/'.length));
+  } catch {
+    return null;
+  }
+};
+const getNewsTimestamp = (item) => {
+  if (item?.createdAt?.toDate) return item.createdAt.toDate().getTime();
+  const timestamp = new Date(item?.createdAt || 0).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
 
 const DEPARTMENT_CONFIG = [
   { id: 'proje', name: 'Proje Departmanı', color: '#3b82f6', icon: 'project', desc: 'Proje yönetimi, planlama ve takip işlemleri' },
@@ -33,19 +51,17 @@ function App() {
   const [hasTodayPermission, setHasTodayPermission] = useState(false);
   const [departments, setDepartments] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [news, setNews] = useState([]);
+  const [newsError, setNewsError] = useState('');
 
   const [page, setPage] = useState(() => {
     const hash = window.location.hash.replace('#', '');
-    return VALID_PAGES.includes(hash) ? hash : 'home';
+    return isValidPage(hash) ? hash : 'home';
   });
   const navigateTo = (nextPage) => {
-    if (!VALID_PAGES.includes(nextPage)) return;
+    if (!isValidPage(nextPage)) return;
     setPage(nextPage);
     if (window.location.hash !== `#${nextPage}`) window.location.hash = nextPage;
-    if (nextPage === 'departments') {
-      setDeptViewMode('list');
-      setSelectedDepartment(null);
-    }
   };
   const [loadingData, setLoadingData] = useState(true);
   const [globalError, setGlobalError] = useState('');
@@ -77,13 +93,12 @@ function App() {
   const [userProjects, setUserProjects] = useState([]);
   const [userTasks, setUserTasks] = useState([]);
   const [departmentBusy, setDepartmentBusy] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
+  const [deptViewMode, setDeptViewMode] = useState('list');
 
   /* =========================================================
    * DEPARTMAN STATE VE YAPILANDIRMA
    * ========================================================= */
-  const [selectedDepartment, setSelectedDepartment] = useState(null);
-  const [deptViewMode, setDeptViewMode] = useState('list'); // 'list' | 'detail'
-
   const DEPT_ICONS = {
     project: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 2v18h18V2H3zM5 4h14v16H5V4zM7 8h10v12H7V8z" fill="currentColor"/></svg>`,
     hardware: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" fill="currentColor"/></svg>`,
@@ -130,7 +145,7 @@ function App() {
     setLoadingData(true);
     setGlobalError('');
     try {
-      const [mems, meets, atts, greys, perms, usersSnap, deptSnap, projs, userDeps, userProjs, userTsks] = await Promise.all([
+      const [mems, meets, atts, greys, perms, usersSnap, deptSnap, projs, userDeps, userProjs, userTsks, newsResult] = await Promise.all([
         fs.getMembersFS(),
         fs.getMeetingsFS(),
         fs.getAttendanceFS(),
@@ -142,6 +157,7 @@ function App() {
         fs.getUserDepartmentsFS(),
         fs.getUserProjectsFS(),
         fs.getUserTasksFS(user.uid),
+        fs.getNewsFS().then((data) => ({ data })).catch((error) => ({ error })),
       ]);
 
       // Eksik kullanıcıları members'a otomatik ekle
@@ -165,7 +181,14 @@ function App() {
         return { ...config, ...department };
       });
       setDepartments(loadedDepartments);
+      setSelectedDepartment((current) => (
+        current ? loadedDepartments.find((department) => String(department.id) === String(current.id)) || current : current
+      ));
       setProjects(projs);
+      setNews(newsResult.data || []);
+      setNewsError(newsResult.error
+        ? `Haberler yüklenemedi. Firestore rules dosyasının güncel sürümünü yayımlayın. ${newsResult.error.message || ''}`.trim()
+        : '');
       setUsersList(usersSnap);
       setUserDepartments(userDeps.map((ud) => ({ ...ud, departmentName: loadedDepartments.find((d) => String(d.id) === String(ud.departmentId))?.name || '' })));
       setUserProjects(userProjs.map((up) => ({ ...up, projectName: projs.find((p) => String(p.id) === String(up.projectId))?.name || '' })));
@@ -210,9 +233,6 @@ function App() {
       return { ...config, ...department };
     });
     setDepartments(loadedDepartments);
-    setSelectedDepartment((current) => (
-      current ? loadedDepartments.find((department) => String(department.id) === String(current.id)) || current : current
-    ));
     setProjects(projectRecords);
     setUserDepartments(memberships.map((membership) => ({
       ...membership,
@@ -243,12 +263,8 @@ function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '') || 'home';
-      if (VALID_PAGES.includes(hash)) {
+      if (isValidPage(hash)) {
         setPage(hash);
-        if (hash === 'departments') {
-          setDeptViewMode('list');
-          setSelectedDepartment(null);
-        }
       }
     };
     window.addEventListener('hashchange', handleHashChange);
@@ -593,6 +609,37 @@ function App() {
     }
   };
 
+  const publishNews = async ({ title, body }, departmentId = null) => {
+    const department = departmentId == null
+      ? null
+      : departments.find((item) => String(item.id) === String(departmentId));
+    if (departmentId == null ? !isAdmin : !canManageDepartment(department)) {
+      throw new Error('Bu alanda haber yayımlama yetkiniz yok.');
+    }
+
+    await fs.addNewsFS({
+      title,
+      body,
+      departmentId,
+      authorName: user.displayName || user.email || 'Topluluk',
+    });
+    setNews(await fs.getNewsFS());
+    setNewsError('');
+  };
+
+  const canDeleteNews = (item) => {
+    if (isAdmin) return true;
+    const department = departments.find((entry) => String(entry.id) === String(item.departmentId));
+    return !!item.departmentId && canManageDepartment(department);
+  };
+
+  const deleteNews = async (item) => {
+    if (!canDeleteNews(item)) throw new Error('Bu haberi silme yetkiniz yok.');
+    await fs.deleteNewsFS(item.id);
+    setNews(await fs.getNewsFS());
+    setNewsError('');
+  };
+
   const addTask = async (task) => {
     if (!task.title.trim()) return false;
     setBusy(true);
@@ -683,6 +730,18 @@ function App() {
       : 0;
 
   const unreadNotifCount = notifs.filter((n) => !n.read).length;
+  const sortedNews = [...news].sort((a, b) => getNewsTimestamp(b) - getNewsTimestamp(a));
+  const currentDepartmentId = getDepartmentIdFromPage(page);
+  const currentDepartment = departments.find((item) => String(item.id) === String(currentDepartmentId));
+  const currentDepartmentNews = sortedNews.filter((item) => String(item.departmentId) === String(currentDepartmentId));
+  const currentDepartmentMeetings = currentDepartment
+    ? meetings.filter((meeting) => (
+      String(meeting.departmentId) === String(currentDepartment.id)
+      || [meeting.title, meeting.gundem, meeting.notes].some((value) => value?.includes(currentDepartment.name))
+    ))
+    : [];
+  const currentDepartmentProjects = projects.filter((item) => String(item.departmentId) === String(currentDepartmentId));
+  const currentDepartmentMemberships = userDepartments.filter((item) => String(item.departmentId) === String(currentDepartmentId));
 
   /* =========================================================
    * YÜKLEME VE HATA EKRANLARI
@@ -710,6 +769,9 @@ function App() {
         isAdmin={isAdmin}
         greyListCount={greyList.length}
         unreadNotifCount={unreadNotifCount}
+        news={sortedNews}
+        newsError={newsError}
+        departments={departments}
         onNavigate={navigateTo}
         onSignOut={fs.signOutFS}
       />
@@ -751,7 +813,7 @@ function App() {
       <Sidebar
         user={user}
         role={role}
-        activePage={page}
+        activePage={currentDepartmentId ? 'departments' : page}
         onNavigate={navigateTo}
         onSignOut={fs.signOutFS}
         isAdmin={isAdmin}
@@ -817,11 +879,12 @@ function App() {
             meetings: 'Toplantılar',
             'grey-list': 'Gri Liste',
             departments: 'Departmanlar',
+            news: 'Genel Haberler',
             calendar: 'Toplantı Takvimi',
             'admin-panel': 'Yönetim Merkezi',
             'new-meeting': editingMeeting ? 'Toplantıyı Düzenle' : 'Yeni Toplantı',
             'new-member': 'Yeni Üye',
-          })[page] || 'Topluluk'}</h1>
+          })[page] || currentDepartment?.name || 'Topluluk'}</h1>
         </div>
         <input
           className="search-input"
@@ -838,6 +901,24 @@ function App() {
           <div className="empty-msg" style={{ padding: '4rem 0' }}>Veriler güncelleniyor...</div>
         ) : (
           <>
+            {page === 'news' && (
+              <section className="section">
+                <div className="section-header">
+                  <div><p className="profile-eyebrow">TOPLULUK AKIŞI</p><h2>Genel Haberler</h2></div>
+                </div>
+                <p className="section-desc">Topluluk ve tüm departmanlardan yayımlanan haberler burada bir araya gelir.</p>
+                <NewsBoard
+                  news={sortedNews}
+                  departments={departments}
+                  loadError={newsError}
+                  canPublish={isAdmin}
+                  canDelete={canDeleteNews}
+                  onPublish={(article) => publishNews(article)}
+                  onDelete={deleteNews}
+                />
+              </section>
+            )}
+
             {/* === MEETINGS TAB === */}
             {page === 'meetings' && (
               <section className="section">
@@ -1200,7 +1281,15 @@ function App() {
                         <div
                           key={dept.id}
                           className="card"
-                          onClick={() => { setSelectedDepartment(dept); setDeptViewMode('detail'); }}
+                          role="link"
+                          tabIndex={0}
+                          onClick={() => navigateTo(`department/${encodeURIComponent(String(dept.id))}`)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              navigateTo(`department/${encodeURIComponent(String(dept.id))}`);
+                            }
+                          }}
                           style={{ cursor: 'pointer', borderTop: `4px solid ${dept.color}`, transition: 'transform 0.2s' }}
                           onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; }}
                           onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
@@ -1241,6 +1330,48 @@ function App() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {currentDepartmentId && (
+              currentDepartment ? (
+                <DepartmentPage
+                  department={currentDepartment}
+                  meetings={currentDepartmentMeetings}
+                  projects={currentDepartmentProjects}
+                  memberCount={currentDepartmentMemberships.length}
+                  presidentName={usersList.find((item) => String(item.id) === String(currentDepartment.presidentUid))?.name}
+                  news={currentDepartmentNews}
+                  departments={departments}
+                  loadError={newsError}
+                  canManage={canManageDepartment(currentDepartment)}
+                  onPublishNews={(article) => publishNews(article, currentDepartment.id)}
+                  onDeleteNews={deleteNews}
+                  canDeleteNews={canDeleteNews}
+                  onNavigate={navigateTo}
+                  adminPanel={(
+                    <DepartmentAdminPanel
+                      department={currentDepartment}
+                      users={usersList}
+                      members={members}
+                      userDepartments={userDepartments}
+                      projects={projects}
+                      userUid={user.uid}
+                      isAdmin={isAdmin}
+                      busy={departmentBusy}
+                      onAddMember={addDepartmentMember}
+                      onRemoveMember={removeDepartmentMember}
+                      onAddProject={addDepartmentProject}
+                      onDeleteProject={deleteDepartmentProject}
+                    />
+                  )}
+                />
+              ) : (
+                <section className="section">
+                  <h2>Departman bulunamadı</h2>
+                  <p className="empty-msg">Bu departman mevcut değil veya henüz yüklenmedi.</p>
+                  <button className="btn" onClick={() => navigateTo('departments')}>Departmanlara dön</button>
+                </section>
+              )
             )}
 
             {/* === DEPARTMAN DETAY === */}

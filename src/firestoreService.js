@@ -357,6 +357,32 @@ export const deleteProjectFS = async (id) => {
 };
 
 /* =========================================================
+ * HABERLER
+ * ========================================================= */
+
+export const getNewsFS = async () => {
+  const snapshot = await getDocs(collection(db, 'news'));
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+};
+
+export const addNewsFS = async ({ title, body, departmentId = null, authorName }) => {
+  const data = {
+    title: title.trim(),
+    body: body.trim(),
+    departmentId,
+    createdBy: auth.currentUser?.uid || null,
+    authorName: authorName || auth.currentUser?.displayName || auth.currentUser?.email || 'Topluluk',
+    createdAt: serverTimestamp(),
+  };
+  const reference = await addDoc(collection(db, 'news'), data);
+  return { id: reference.id, ...data };
+};
+
+export const deleteNewsFS = async (id) => {
+  await deleteDoc(doc(db, 'news', String(id)));
+};
+
+/* =========================================================
  * KULLANICI - DEPARTMAN (çoka-çok)
  * ========================================================= */
 

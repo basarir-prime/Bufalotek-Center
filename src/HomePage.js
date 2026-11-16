@@ -1,7 +1,8 @@
 import React from 'react';
 import Sidebar from './Sidebar';
+import NewsBoard from './NewsBoard';
 
-const HomePage = ({ user, role, isAdmin, greyListCount, unreadNotifCount, onNavigate, onSignOut }) => {
+const HomePage = ({ user, role, isAdmin, greyListCount, unreadNotifCount, news, newsError, departments, onNavigate, onSignOut }) => {
   const name = user.displayName?.trim() || user.email?.split('@')[0] || 'Kullanıcı';
 
   return (
@@ -59,6 +60,13 @@ const HomePage = ({ user, role, isAdmin, greyListCount, unreadNotifCount, onNavi
                 </button>
               </article>
             </div>
+          </section>
+          <section className="section home-news">
+            <div className="section-header">
+              <div><p className="profile-eyebrow">TOPLULUKTAN</p><h2>Son Haberler</h2></div>
+              <button className="btn btn-sm" onClick={() => onNavigate('news')}>Tüm haberler <span aria-hidden="true">→</span></button>
+            </div>
+            <NewsBoard news={(news || []).slice(0, 3)} departments={departments || []} loadError={newsError} />
           </section>
         </main>
         <footer className="footer"><p>Bufalotek Center &copy; {new Date().getFullYear()} — Bilişim Topluluğu</p></footer>

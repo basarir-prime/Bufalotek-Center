@@ -3,6 +3,7 @@ import React from 'react';
 const NAV_ITEMS = [
   { id: 'home', label: 'Genel Bakış', icon: '⌂' },
   { id: 'meetings', label: 'Toplantılar', icon: '▤' },
+  { id: 'news', label: 'Haberler', icon: '✦' },
   { id: 'departments', label: 'Departmanlar', icon: '◇' },
   { id: 'calendar', label: 'Takvim', icon: '▦' },
   { id: 'grey-list', label: 'Gri Liste', icon: '◉' },

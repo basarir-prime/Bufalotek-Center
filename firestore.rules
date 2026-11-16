@@ -114,6 +114,26 @@ service cloud.firestore {
       allow delete: if isAdmin() || isDepartmentChair(resource.data.departmentId);
     }
 
+    // ---------- NEWS ----------
+    // Department posts live in the same collection as general news, so they
+    // appear in both feeds without copying or duplicating documents.
+    match /news/{newsId} {
+      allow read: if isUser();
+      allow create: if isValidNews(request.resource.data)
+                    && (isAdmin()
+                        || (request.resource.data.departmentId is string
+                            && isDepartmentChair(request.resource.data.departmentId)));
+      allow update: if isValidNews(request.resource.data)
+                    && (isAdmin()
+                        || (resource.data.departmentId is string
+                            && isDepartmentChair(resource.data.departmentId)
+                            && request.resource.data.departmentId == resource.data.departmentId
+                            && request.resource.data.createdBy == resource.data.createdBy));
+      allow delete: if isAdmin()
+                    || (resource.data.departmentId is string
+                        && isDepartmentChair(resource.data.departmentId));
+    }
+
     // ---------- USER DEPARTMENTS ----------
     match /userDepartments/{docId} {
       allow read: if isUser();
@@ -154,6 +174,19 @@ service cloud.firestore {
         isLogTutucuForDate(request.resource.data.date) ||
         isLogTutucuForDate(resource.data.date)
       );
+    }
+
+    function isValidNews(data) {
+      return data.keys().hasAll(['title', 'body', 'departmentId', 'createdBy', 'authorName'])
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 120
+        && data.body is string
+        && data.body.size() > 0
+        && data.body.size() <= 5000
+        && data.createdBy is string
+        && data.authorName is string
+        && (data.departmentId == null || data.departmentId is string);
     }
   }
 }

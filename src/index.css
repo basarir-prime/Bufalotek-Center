@@ -1993,3 +1993,437 @@ a {
     max-width: none;
   }
 }
+
+/* Shared news feed and department workspaces */
+.news-board {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.news-composer {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: #141a22;
+}
+
+.news-composer-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.35rem;
+}
+
+.news-composer-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 11px;
+  background: rgba(156, 140, 255, 0.12);
+  color: var(--accent-purple);
+}
+
+.news-composer-heading h3,
+.news-card h3 {
+  color: var(--text-primary);
+  font: 650 0.96rem 'Manrope', sans-serif;
+}
+
+.news-composer-heading p {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.news-field-label {
+  color: var(--text-secondary);
+  font-size: 0.73rem;
+  font-weight: 600;
+}
+
+.news-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0.6rem 0.72rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  outline: none;
+  background: #0e1319;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.news-input:focus {
+  border-color: rgba(156, 140, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(156, 140, 255, 0.1);
+}
+
+.news-textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.news-composer-footer,
+.news-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.news-composer-footer > span {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+}
+
+.news-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.news-card {
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: #171c24;
+}
+
+.news-card-meta {
+  justify-content: flex-start;
+  margin-bottom: 0.6rem;
+}
+
+.news-card-meta time {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.news-card-meta .btn {
+  margin-left: auto;
+}
+
+.news-tag {
+  padding: 0.18rem 0.5rem;
+  border: 1px solid rgba(131, 167, 255, 0.22);
+  border-radius: 20px;
+  background: rgba(131, 167, 255, 0.08);
+  color: var(--accent-blue);
+  font-size: 0.64rem;
+  font-weight: 600;
+}
+
+.news-tag-department {
+  border-color: rgba(156, 140, 255, 0.25);
+  background: rgba(156, 140, 255, 0.1);
+  color: #b6aaff;
+}
+
+.news-card-body {
+  margin-top: 0.4rem;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.news-author {
+  margin-top: 0.7rem;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.home-news .news-card:nth-child(n + 4) {
+  display: none;
+}
+
+.department-page {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.department-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 1.25rem clamp(1rem, 3vw, 1.8rem);
+  border: 1px solid color-mix(in srgb, var(--department-color) 30%, var(--border-color));
+  border-radius: 16px;
+  background:
+    radial-gradient(ellipse at 87% 35%, color-mix(in srgb, var(--department-color) 18%, transparent), transparent 35%),
+    linear-gradient(125deg, #191e27, #12171e);
+}
+
+.department-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+
+.department-back:hover {
+  color: var(--text-primary);
+}
+
+.department-hero-content {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-top: 1.1rem;
+}
+
+.department-symbol {
+  display: grid;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--department-color) 42%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--department-color) 16%, transparent);
+  color: var(--department-color);
+  font: 700 1.35rem 'Manrope', sans-serif;
+}
+
+.department-hero-content h2 {
+  margin: 0.12rem 0 0.16rem;
+  color: var(--text-primary);
+  font: 700 clamp(1.3rem, 3vw, 1.8rem)/1.25 'Manrope', sans-serif;
+  letter-spacing: -0.035em;
+}
+
+.department-hero-content > div > p:last-child {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.department-hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 1.15rem;
+}
+
+.department-hero-stats span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0.35rem 0.58rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: rgba(10, 13, 18, 0.38);
+  color: var(--text-muted);
+  font-size: 0.67rem;
+}
+
+.department-hero-stats strong {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+}
+
+.department-tabs {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding: 0.3rem;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  background: #11161d;
+}
+
+.department-tab {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.department-tab:hover {
+  color: var(--text-primary);
+}
+
+.department-tab-active {
+  border-color: var(--border-color);
+  background: #202630;
+  color: var(--text-primary);
+}
+
+.department-tab > span {
+  color: var(--accent-purple);
+  font-size: 0.65rem;
+}
+
+.department-home-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.department-overview {
+  min-height: 210px;
+  background:
+    radial-gradient(ellipse at 90% 5%, rgba(156, 140, 255, 0.12), transparent 45%),
+    linear-gradient(145deg, #171c24, #12171e);
+}
+
+.department-overview h3 {
+  max-width: 380px;
+  margin: 0.55rem 0 0.4rem;
+  color: var(--text-primary);
+  font: 650 1.15rem 'Manrope', sans-serif;
+}
+
+.department-overview > p:not(.profile-eyebrow) {
+  margin-bottom: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.department-home-news,
+.department-home-summary {
+  min-width: 0;
+}
+
+.department-home-news .section-header,
+.department-home-summary .section-header {
+  margin-bottom: 0.75rem;
+}
+
+.department-home-news .news-card {
+  padding: 0.75rem;
+}
+
+.department-home-news .news-card h3 {
+  font-size: 0.84rem;
+}
+
+.department-project-list {
+  display: grid;
+  gap: 0.4rem;
+  list-style: none;
+}
+
+.department-project-list li {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: #171c24;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.department-meeting-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.department-meeting-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  background: #171c24;
+}
+
+.department-meeting-date {
+  flex: 0 0 auto;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid rgba(131, 167, 255, 0.2);
+  border-radius: 7px;
+  background: rgba(131, 167, 255, 0.08);
+  color: var(--accent-blue);
+  font-size: 0.67rem;
+}
+
+.department-meeting-card h3 {
+  margin-bottom: 0.2rem;
+  color: var(--text-primary);
+  font: 650 0.88rem 'Manrope', sans-serif;
+}
+
+.department-meeting-card p {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+}
+
+.department-project-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+}
+
+.department-project-card {
+  min-height: 135px;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #191f28, #141920);
+}
+
+.department-project-card > span {
+  color: var(--accent-purple);
+  font-size: 1.1rem;
+}
+
+.department-project-card h3 {
+  margin-top: 0.4rem;
+  color: var(--text-primary);
+  font: 650 0.9rem 'Manrope', sans-serif;
+}
+
+.department-project-card p {
+  margin-top: 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+@supports not (background: color-mix(in srgb, white, black)) {
+  .department-hero {
+    border-color: var(--border-strong);
+  }
+
+  .department-symbol {
+    border-color: var(--border-strong);
+    background: var(--bg-elevated);
+  }
+}
+
+@media (max-width: 700px) {
+  .department-home-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .department-hero {
+    padding: 1rem;
+  }
+
+  .department-hero-stats {
+    gap: 0.35rem;
+  }
+
+  .department-hero-stats span {
+    font-size: 0.62rem;
+  }
+
+  .department-tabs {
+    margin: 0 -0.15rem;
+  }
+}
