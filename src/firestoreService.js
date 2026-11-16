@@ -311,19 +311,30 @@ export const deleteDepartmentFS = async (id) => {
 
 export const initDepartmentsFS = async () => {
   const defaults = [
-    { name: 'Proje Departmanı', color: '#3b82f6', icon: 'project', desc: 'Proje yönetimi, planlama ve takip işlemleri' },
-    { name: 'Donanım Departmanı', color: '#ef4444', icon: 'hardware', desc: 'Donanım altyapısı, cihaz bakımı ve teknik destek' },
-    { name: 'Yazılım Departmanı', color: '#10b981', icon: 'code', desc: 'Yazılım geliştirme, kodlama ve sistem yazılımı' },
-    { name: 'PR Departmanı', color: '#8b5cf6', icon: 'megaphone', desc: 'Halkla ilişkiler, iletişim ve marka image çalışmaları' },
-    { name: 'Grafik Tasarım Departmanı', color: '#ec4899', icon: 'palette', desc: 'Görsel tasarım, marka kimliği ve grafik işleri' },
+    { id: 'proje', name: 'Proje Departmanı', color: '#3b82f6', icon: 'project', desc: 'Proje yönetimi, planlama ve takip işlemleri' },
+    { id: 'donanim', name: 'Donanım Departmanı', color: '#ef4444', icon: 'hardware', desc: 'Donanım altyapısı, cihaz bakımı ve teknik destek' },
+    { id: 'yazilim', name: 'Yazılım Departmanı', color: '#10b981', icon: 'code', desc: 'Yazılım geliştirme, kodlama ve sistem yazılımı' },
+    { id: 'pr', name: 'PR Departmanı', color: '#8b5cf6', icon: 'megaphone', desc: 'Halkla ilişkiler, iletişim ve marka image çalışmaları' },
+    { id: 'grafik', name: 'Grafik Tasarım Departmanı', color: '#ec4899', icon: 'palette', desc: 'Görsel tasarım, marka kimliği ve grafik işleri' },
   ];
   const existing = await getDepartmentsFS();
-  if (existing.length === 0) {
-    for (const d of defaults) {
-      await addDepartmentFS(d.name);
+  for (const department of defaults) {
+    if (!existing.some((item) => item.name === department.name)) {
+      await setDoc(doc(db, 'departments', department.id), {
+        ...department,
+        presidentUid: null,
+        createdAt: serverTimestamp(),
+      }, { merge: true });
     }
   }
-  return defaults;
+  return getDepartmentsFS();
+};
+
+export const updateDepartmentPresidentFS = async (departmentId, presidentUid) => {
+  await updateDoc(doc(db, 'departments', String(departmentId)), {
+    presidentUid: presidentUid || null,
+    updatedAt: serverTimestamp(),
+  });
 };
 
 /* =========================================================

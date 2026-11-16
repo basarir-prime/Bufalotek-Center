@@ -4,9 +4,10 @@ rules_version = '2';
 //
 // Roller:
 //   - admin: custom claim "admin" VEYA users/{uid}.role == "admin"
+//   - departman başkanı: departments/{departmentId}.presidentUid
 //   - user:  giriş yapmış her kullanıcı
 //
-// Admin YAPMAK için (Firebase Console):
+// İlk admin'i tanımlamak için (Firebase Console):
 //   1. Authentication > Users > ilgili kullanıcı > Custom claims = { "role": "admin" }
 //      VEYA
 //   2. Firestore > users koleksiyonu > ilgili uid dokümanı > role: "admin"
@@ -31,6 +32,12 @@ service cloud.firestore {
       );
     }
 
+    function isDepartmentChair(departmentId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/departments/$(departmentId))
+        && get(/databases/$(database)/documents/departments/$(departmentId)).data.presidentUid == uid();
+    }
+
     function isUser() {
       return isSignedIn();
     }
@@ -38,7 +45,9 @@ service cloud.firestore {
     // ---------- USERS ----------
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && uid() == userId;
+      allow create: if isSignedIn()
+                    && uid() == userId
+                    && request.resource.data.role == 'user';
       allow update: if isAdmin()
                     || (isSignedIn() && uid() == userId
                         && !('role' in request.resource.data.diff(resource.data).affectedKeys()));
@@ -48,7 +57,11 @@ service cloud.firestore {
     // ---------- MEMBERS ----------
     match /members/{memberId} {
       allow read: if isUser();
-      allow create, update, delete: if isAdmin();
+      allow create: if isAdmin()
+                    || (isSignedIn()
+                        && uid() == memberId
+                        && exists(/databases/$(database)/documents/users/$(uid())));
+      allow update, delete: if isAdmin();
     }
 
     // ---------- MEETINGS ----------
@@ -92,15 +105,26 @@ service cloud.firestore {
     // ---------- PROJECTS ----------
     match /projects/{docId} {
       allow read: if isUser();
-      allow write: if isAdmin();
+      allow create: if isAdmin()
+                    || (request.resource.data.departmentId is string
+                        && isDepartmentChair(request.resource.data.departmentId));
+      allow update: if isAdmin()
+                    || (isDepartmentChair(resource.data.departmentId)
+                        && request.resource.data.departmentId == resource.data.departmentId);
+      allow delete: if isAdmin() || isDepartmentChair(resource.data.departmentId);
     }
 
     // ---------- USER DEPARTMENTS ----------
     match /userDepartments/{docId} {
       allow read: if isUser();
-      allow create: if isSignedIn() && uid() == request.resource.data.uid;
-      allow update, delete: if isAdmin()
-                            || (isSignedIn() && uid() == resource.data.uid);
+      allow create: if isAdmin()
+                    || (request.resource.data.uid is string
+                        && request.resource.data.departmentId is string
+                        && docId == request.resource.data.uid + '_' + request.resource.data.departmentId
+                        && exists(/databases/$(database)/documents/users/$(request.resource.data.uid))
+                        && isDepartmentChair(request.resource.data.departmentId));
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || isDepartmentChair(resource.data.departmentId);
     }
 
     // ---------- USER PROJECTS ----------

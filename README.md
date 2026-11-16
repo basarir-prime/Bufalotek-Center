@@ -14,6 +14,7 @@ GitHub Pages üzerinden otomatik dağıtım yapılır — `main` dalına her pus
 - **Koyu Tema**: Modern, bilişim topluluğuna uygun koyu tema (neon mavi/mor).
 - **Takvim Görünümü**: Toplantılar aylık takvim formatında.
 - **Bağımsız Profil Sayfası**: Hesap bilgileri, departman ve projeler, kişisel görevler, toplantı takvimi ve bildirimler ayrı bir profil sayfasında.
+- **Departman Başkanları**: Genel başkan, Admin Paneli'nden departman başkanlarını atar. Departman başkanı yalnızca kendi departmanının üye ve projelerini yönetebilir; genel başkan tüm departmanları yönetebilir.
 - **Firebase Entegrasyonu**: Birden çok kullanıcı aynı anda log tutabilir.
 
 ## GitHub Secrets (Zorunlu)
@@ -39,6 +40,8 @@ Repository'yi oluşturduktan sonra **Settings → Secrets and variables → Acti
 4. **Project Settings → Your apps → Web App** ekleyip SDK config'i al (npm seçeneği).
 5. Yukarıdaki GitHub Secrets'a bu değerleri gir.
 6. **Firestore Database → Rules** sekmesine git, `firestore.rules` dosyasının içeriğini yapıştır, **Publish** et.
+
+`firestore.rules` dosyası değiştiğinde yeni kuralları aynı ekrandan yeniden yayımlayın; başkan ve departman yönetimi yetkileri bu kurallarla sunucu tarafında korunur.
 
 ### 2. İlk Admin Kullanıcı
 

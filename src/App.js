@@ -2,8 +2,17 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './authContext';
 import * as fs from './firestoreService';
 import ProfilePage from './ProfilePage';
+import DepartmentAdminPanel, { DepartmentPresidentAssignments } from './DepartmentAdminPanel';
 
 const VALID_PAGES = ['meetings', 'grey-list', 'departments', 'calendar', 'profile', 'admin-panel', 'new-meeting', 'new-member'];
+
+const DEPARTMENT_CONFIG = [
+  { id: 'proje', name: 'Proje Departmanı', color: '#3b82f6', icon: 'project', desc: 'Proje yönetimi, planlama ve takip işlemleri' },
+  { id: 'donanim', name: 'Donanım Departmanı', color: '#ef4444', icon: 'hardware', desc: 'Donanım altyapısı, cihaz bakımı ve teknik destek' },
+  { id: 'yazilim', name: 'Yazılım Departmanı', color: '#10b981', icon: 'code', desc: 'Yazılım geliştirme, kodlama ve sistem yazılımı' },
+  { id: 'pr', name: 'PR Departmanı', color: '#8b5cf6', icon: 'megaphone', desc: 'Halkla ilişkiler, iletişim ve marka image çalışmaları' },
+  { id: 'grafik', name: 'Grafik Tasarım Departmanı', color: '#ec4899', icon: 'palette', desc: 'Görsel tasarım, marka kimliği ve grafik işleri' },
+];
 
 const getDateISO = (date = new Date()) => (
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -20,6 +29,8 @@ function App() {
   const [greyList, setGreyList] = useState([]);
   const [notifs, setNotifs] = useState([]);
   const [hasTodayPermission, setHasTodayPermission] = useState(false);
+  const [departments, setDepartments] = useState([]);
+  const [projects, setProjects] = useState([]);
 
   const [page, setPage] = useState(() => {
     const hash = window.location.hash.replace('#', '');
@@ -63,50 +74,13 @@ function App() {
   const [userDepartments, setUserDepartments] = useState([]);
   const [userProjects, setUserProjects] = useState([]);
   const [userTasks, setUserTasks] = useState([]);
+  const [departmentBusy, setDepartmentBusy] = useState(false);
 
   /* =========================================================
    * DEPARTMAN STATE VE YAPILANDIRMA
    * ========================================================= */
   const [selectedDepartment, setSelectedDepartment] = useState(null);
   const [deptViewMode, setDeptViewMode] = useState('list'); // 'list' | 'detail'
-
-  const DEPARTMENT_CONFIG = [
-    {
-      id: 'proje',
-      name: 'Proje Departmanı',
-      color: '#3b82f6',
-      icon: 'project',
-      desc: 'Proje yönetimi, planlama ve takip işlemleri',
-    },
-    {
-      id: 'donanim',
-      name: 'Donanım Departmanı',
-      color: '#ef4444',
-      icon: 'hardware',
-      desc: 'Donanım altyapısı, cihaz bakımı ve teknik destek',
-    },
-    {
-      id: 'yazilim',
-      name: 'Yazılım Departmanı',
-      color: '#10b981',
-      icon: 'code',
-      desc: 'Yazılım geliştirme, kodlama ve sistem yazılımı',
-    },
-    {
-      id: 'pr',
-      name: 'PR Departmanı',
-      color: '#8b5cf6',
-      icon: 'megaphone',
-      desc: 'Halkla ilişkiler, iletişim ve marka image çalışmaları',
-    },
-    {
-      id: 'grafik',
-      name: 'Grafik Tasarım Departmanı',
-      color: '#ec4899',
-      icon: 'palette',
-      desc: 'Görsel tasarım, marka kimliği ve grafik işleri',
-    },
-  ];
 
   const DEPT_ICONS = {
     project: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 2v18h18V2H3zM5 4h14v16H5V4zM7 8h10v12H7V8z" fill="currentColor"/></svg>`,
@@ -154,13 +128,14 @@ function App() {
     setLoadingData(true);
     setGlobalError('');
     try {
-      const [mems, meets, atts, greys, perms, usersSnap, projs, userDeps, userProjs, userTsks] = await Promise.all([
+      const [mems, meets, atts, greys, perms, usersSnap, deptSnap, projs, userDeps, userProjs, userTsks] = await Promise.all([
         fs.getMembersFS(),
         fs.getMeetingsFS(),
         fs.getAttendanceFS(),
         fs.getGreyListFS(),
         fs.getLogPermissionsForDate(getTodayISO()),
         fs.getUsersFS(),
+        isAdmin ? fs.initDepartmentsFS() : fs.getDepartmentsFS(),
         fs.getProjectsFS(),
         fs.getUserDepartmentsFS(),
         fs.getUserProjectsFS(),
@@ -168,23 +143,29 @@ function App() {
       ]);
 
       // Eksik kullanıcıları members'a otomatik ekle
-      const memberUidSet = new Set(mems.map((m) => String(m.id)));
-      for (const u of usersSnap) {
-        if (!memberUidSet.has(String(u.id))) {
-          await fs.addMemberFS({ name: u.name || 'İsimsiz', email: u.email }, u.id);
+      if (isAdmin) {
+        const memberUidSet = new Set(mems.map((m) => String(m.id)));
+        for (const u of usersSnap) {
+          if (!memberUidSet.has(String(u.id))) {
+            await fs.addMemberFS({ name: u.name || 'İsimsiz', email: u.email }, u.id);
+          }
         }
       }
-
-      // Departmanları başlat (ilk kurulumda)
-      await fs.initDepartmentsFS();
-      const freshDeps = await fs.getDepartmentsFS();
 
       // Güncel members listesini tekrar çek
       const updatedMems = await fs.getMembersFS();
       setMembers(updatedMems);
       setMeetings(meets);
       setGreyList(greys);
-      setUserDepartments(userDeps.map((ud) => ({ ...ud, departmentName: freshDeps.find((d) => String(d.id) === String(ud.departmentId))?.name || '' })));
+      const loadedDepartments = deptSnap.map((department) => {
+        const config = DEPARTMENT_CONFIG.find((item) => item.name === department.name)
+          || { color: '#58a6ff', icon: 'project', desc: '' };
+        return { ...config, ...department };
+      });
+      setDepartments(loadedDepartments);
+      setProjects(projs);
+      setUsersList(usersSnap);
+      setUserDepartments(userDeps.map((ud) => ({ ...ud, departmentName: loadedDepartments.find((d) => String(d.id) === String(ud.departmentId))?.name || '' })));
       setUserProjects(userProjs.map((up) => ({ ...up, projectName: projs.find((p) => String(p.id) === String(up.projectId))?.name || '' })));
       setUserTasks(userTsks);
 
@@ -206,7 +187,7 @@ function App() {
     } finally {
       setLoadingData(false);
     }
-  }, [user]);
+  }, [user, isAdmin]);
 
   // Auth durumu değişince veya yüklenince verileri çek
   useEffect(() => {
@@ -214,6 +195,28 @@ function App() {
       refreshAllData();
     }
   }, [user, refreshAllData]);
+
+  const refreshDepartmentData = useCallback(async () => {
+    const [departmentRecords, memberships, projectRecords] = await Promise.all([
+      fs.getDepartmentsFS(),
+      fs.getUserDepartmentsFS(),
+      fs.getProjectsFS(),
+    ]);
+    const loadedDepartments = departmentRecords.map((department) => {
+      const config = DEPARTMENT_CONFIG.find((item) => item.name === department.name)
+        || { color: '#58a6ff', icon: 'project', desc: '' };
+      return { ...config, ...department };
+    });
+    setDepartments(loadedDepartments);
+    setSelectedDepartment((current) => (
+      current ? loadedDepartments.find((department) => String(department.id) === String(current.id)) || current : current
+    ));
+    setProjects(projectRecords);
+    setUserDepartments(memberships.map((membership) => ({
+      ...membership,
+      departmentName: loadedDepartments.find((department) => String(department.id) === String(membership.departmentId))?.name || '',
+    })));
+  }, []);
 
   // Bugüne ait izinleri canlı dinle (onSnapshot)
   useEffect(() => {
@@ -521,6 +524,70 @@ function App() {
       setAdminMsg('Hata: ' + e.message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const canManageDepartment = (department) => (
+    !!department && (isAdmin || String(department.presidentUid) === String(user?.uid))
+  );
+
+  const assignDepartmentPresident = async (departmentId, presidentUid) => {
+    if (!isAdmin) throw new Error('Departman başkanı atama yetkisi yalnızca genel başkandadır.');
+    setBusy(true);
+    try {
+      await fs.updateDepartmentPresidentFS(departmentId, presidentUid);
+      await refreshDepartmentData();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addDepartmentMember = async (departmentId, uid) => {
+    const department = departments.find((item) => String(item.id) === String(departmentId));
+    if (!canManageDepartment(department)) throw new Error('Bu departmanı yönetme yetkiniz yok.');
+    setDepartmentBusy(true);
+    try {
+      await fs.addUserDepartmentFS(uid, departmentId);
+      await refreshDepartmentData();
+    } finally {
+      setDepartmentBusy(false);
+    }
+  };
+
+  const removeDepartmentMember = async (uid, departmentId) => {
+    const department = departments.find((item) => String(item.id) === String(departmentId));
+    if (!canManageDepartment(department)) throw new Error('Bu departmanı yönetme yetkiniz yok.');
+    setDepartmentBusy(true);
+    try {
+      await fs.removeUserDepartmentFS(uid, departmentId);
+      await refreshDepartmentData();
+    } finally {
+      setDepartmentBusy(false);
+    }
+  };
+
+  const addDepartmentProject = async (departmentId, name) => {
+    const department = departments.find((item) => String(item.id) === String(departmentId));
+    if (!canManageDepartment(department)) throw new Error('Bu departmanı yönetme yetkiniz yok.');
+    setDepartmentBusy(true);
+    try {
+      await fs.addProjectFS(name, departmentId);
+      await refreshDepartmentData();
+    } finally {
+      setDepartmentBusy(false);
+    }
+  };
+
+  const deleteDepartmentProject = async (projectId) => {
+    const project = projects.find((item) => String(item.id) === String(projectId));
+    const department = departments.find((item) => String(item.id) === String(project?.departmentId));
+    if (!canManageDepartment(department)) throw new Error('Bu projeyi yönetme yetkiniz yok.');
+    setDepartmentBusy(true);
+    try {
+      await fs.deleteProjectFS(projectId);
+      await refreshDepartmentData();
+    } finally {
+      setDepartmentBusy(false);
     }
   };
 
@@ -1129,7 +1196,7 @@ function App() {
                     Departman bazlı toplantı, görev ve etkinlik takibi. Bir departmana tıklayarak içeriğini görüntüleyebilirsiniz.
                   </p>
                   <div className="card-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-                    {DEPARTMENT_CONFIG.map((dept) => {
+                    {departments.map((dept) => {
                       const deptMembers = members.filter((m) => {
                         const ud = userDepartments.find((ud) => String(ud.departmentId) === dept.id && String(ud.uid) === String(m.id));
                         return !!ud;
@@ -1168,7 +1235,9 @@ function App() {
                               <span className="badge badge-active" style={{ background: dept.color + '15', color: dept.color, border: '1px solid ' + dept.color + '40', fontSize: '0.75rem' }}>
                                 {deptMembers.length} Üye
                               </span>
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Detaya git →</span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                {dept.presidentUid ? 'Başkan atanmış · ' : 'Başkan atanmamış · '}Detaya git →
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -1195,7 +1264,7 @@ function App() {
                     <div>
                       <h1 style={{ fontSize: '1.75rem', margin: 0, color: 'var(--text-primary)' }}>{selectedDepartment.name}</h1>
                       <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                        {selectedDepartment.desc} · {members.filter((m) => userDepartments.some((ud) => String(ud.departmentId) === selectedDepartment.id && String(ud.uid) === String(m.id))).length} üye
+                        {selectedDepartment.desc} · {userDepartments.filter((ud) => String(ud.departmentId) === String(selectedDepartment.id)).length} üye · Başkan: {usersList.find((item) => String(item.id) === String(selectedDepartment.presidentUid))?.name || 'Atanmadı'}
                       </p>
                     </div>
                   </div>
@@ -1211,13 +1280,13 @@ function App() {
                     <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1rem' }}>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Üye</div>
                       <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: selectedDepartment.color, marginTop: '0.25rem' }}>
-                        {members.filter((m) => userDepartments.some((ud) => String(ud.departmentId) === selectedDepartment.id && String(ud.uid) === String(m.id))).length}
+                        {userDepartments.filter((ud) => String(ud.departmentId) === String(selectedDepartment.id)).length}
                       </div>
                     </div>
                     <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1rem' }}>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Görev</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Proje</div>
                       <div style={{ fontSize: '1.75rem', fontWeight: 'bold', color: 'var(--accent-purple)', marginTop: '0.25rem' }}>
-                        {userTasks.filter((t) => t.title?.includes(selectedDepartment.name)).length}
+                        {projects.filter((project) => String(project.departmentId) === String(selectedDepartment.id)).length}
                       </div>
                     </div>
                   </div>
@@ -1229,25 +1298,28 @@ function App() {
                         <tr><th>Üye</th><th>E-posta</th><th>Rol</th><th>Durum</th></tr>
                       </thead>
                       <tbody>
-                        {members.filter((m) => userDepartments.some((ud) => String(ud.departmentId) === selectedDepartment.id && String(ud.uid) === String(m.id))).length === 0 && (
+                        {userDepartments.filter((ud) => String(ud.departmentId) === String(selectedDepartment.id)).length === 0 && (
                           <tr><td colSpan={4} className="empty-msg">Bu departmanda henüz üye yok.</td></tr>
                         )}
-                        {members.filter((m) => userDepartments.some((ud) => String(ud.departmentId) === selectedDepartment.id && String(ud.uid) === String(m.id))).map((m) => (
-                          <tr key={m.id}>
-                            <td>{m.name}</td>
-                            <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{m.email}</td>
+                        {userDepartments.filter((ud) => String(ud.departmentId) === String(selectedDepartment.id)).map((membership) => {
+                          const m = usersList.find((item) => String(item.id) === String(membership.uid))
+                            || members.find((item) => String(item.id) === String(membership.uid));
+                          return (
+                          <tr key={membership.id || `${membership.uid}_${membership.departmentId}`}>
+                            <td>{m?.name || 'Kullanıcı'}</td>
+                            <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{m?.email || '-'}</td>
                             <td>
-                              <span className={`badge ${m.id === user.uid ? 'badge-active' : 'badge-inactive'}`}>
-                                {m.id === user.uid ? 'Siz' : 'Üye'}
+                              <span className={`badge ${String(membership.uid) === String(selectedDepartment.presidentUid) ? 'badge-active' : 'badge-inactive'}`}>
+                                {String(membership.uid) === String(selectedDepartment.presidentUid) ? 'Başkan' : 'Üye'}
                               </span>
                             </td>
                             <td>
-                              <span className={`badge ${m.isActive ? 'badge-active' : 'badge-inactive'}`}>
-                                {m.isActive ? 'Aktif' : 'Pasif'}
+                              <span className={`badge ${m?.isActive !== false ? 'badge-active' : 'badge-inactive'}`}>
+                                {m?.isActive === false ? 'Pasif' : 'Aktif'}
                               </span>
                             </td>
                           </tr>
-                        ))}
+                        );})}
                       </tbody>
                     </table>
                   </div>
@@ -1306,6 +1378,22 @@ function App() {
                     </div>
                   </div>
                 </div>
+                {canManageDepartment(selectedDepartment) && (
+                  <DepartmentAdminPanel
+                    department={selectedDepartment}
+                    users={usersList}
+                    members={members}
+                    userDepartments={userDepartments}
+                    projects={projects}
+                    userUid={user.uid}
+                    isAdmin={isAdmin}
+                    busy={departmentBusy}
+                    onAddMember={addDepartmentMember}
+                    onRemoveMember={removeDepartmentMember}
+                    onAddProject={addDepartmentProject}
+                    onDeleteProject={deleteDepartmentProject}
+                  />
+                )}
               </div>
             )}
             {page === 'admin-panel' && isAdmin && (
@@ -1313,6 +1401,7 @@ function App() {
                 users={usersList}
                 members={members}
                 meetings={meetings}
+                departments={departments}
                 perms={datePerms}
                 permDate={permDate}
                 setPermDate={setPermDate}
@@ -1323,6 +1412,7 @@ function App() {
                 revokePermission={revokePermission}
                 handleRoleChange={handleRoleChange}
                 handleToggleUserActive={handleToggleUserActive}
+                assignDepartmentPresident={assignDepartmentPresident}
                 busy={busy}
               />
             )}
@@ -1479,8 +1569,9 @@ const AuthScreen = () => {
  * ADMIN PANEL COMPONENT
  * ========================================================= */
 const AdminPanel = ({
-  users, members, meetings, perms, permDate, setPermDate, targetUid, setTargetUid,
-  adminMsg, grantPermission, revokePermission, handleRoleChange, handleToggleUserActive, busy
+  users, members, meetings, departments, perms, permDate, setPermDate, targetUid, setTargetUid,
+  adminMsg, grantPermission, revokePermission, handleRoleChange, handleToggleUserActive,
+  assignDepartmentPresident, busy
 }) => {
   const adminStats = {
     totalUsers: users.length,
@@ -1541,6 +1632,13 @@ const AdminPanel = ({
           <span className="admin-stat-label">Toplantı</span>
         </div>
       </div>
+
+      <DepartmentPresidentAssignments
+        departments={departments}
+        users={users}
+        busy={busy}
+        onAssign={assignDepartmentPresident}
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', flexWrap: 'wrap' }}>
 
