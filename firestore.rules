@@ -68,14 +68,25 @@ service cloud.firestore {
     match /meetings/{meetingId} {
       allow read: if isUser();
       allow create: if isAdmin() || isLogTutucuForDate(request.resource.data.date);
-      allow update: if isAdmin() || isLogTutucuForMeetingDate();
+      allow update: if isAdmin()
+                    || (isLogTutucuForDate(resource.data.date)
+                        && isLogTutucuForDate(request.resource.data.date));
       allow delete: if isAdmin();
     }
 
     // ---------- ATTENDANCE ----------
     match /attendance/{aid} {
       allow read: if isUser();
-      allow create, update, delete: if isAdmin();
+      allow create: if isAdmin()
+                    || (request.resource.data.meetingId is string
+                        && isLogTutucuForMeeting(request.resource.data.meetingId));
+      allow update: if isAdmin()
+                    || (resource.data.meetingId is string
+                        && request.resource.data.meetingId == resource.data.meetingId
+                        && isLogTutucuForMeeting(resource.data.meetingId));
+      allow delete: if isAdmin()
+                    || (resource.data.meetingId is string
+                        && isLogTutucuForMeeting(resource.data.meetingId));
     }
 
     // ---------- GREY LIST ----------
@@ -157,23 +168,32 @@ service cloud.firestore {
 
     // ---------- TASKS ----------
     match /tasks/{docId} {
-      allow read: if isUser();
+      allow read: if isAdmin()
+                  || (isSignedIn() && resource.data.userId == uid());
       allow create: if isSignedIn() && uid() == request.resource.data.userId;
-      allow update: if isSignedIn() && (uid() == resource.data.userId || isAdmin());
+      allow update: if isAdmin()
+                    || (isSignedIn()
+                        && uid() == resource.data.userId
+                        && request.resource.data.userId == resource.data.userId);
       allow delete: if isAdmin() || (isSignedIn() && uid() == resource.data.userId);
     }
 
     // ---------- BUGUNUN LOG TUTUCUSU MU? ----------
     function isLogTutucuForDate(dateStr) {
       return isSignedIn()
-        && exists(/databases/$(database)/documents/logPermissions/$(uid() + '_' + dateStr));
+        && dateStr is string
+        && exists(/databases/$(database)/documents/logPermissions/$(uid() + '_' + dateStr))
+        && get(/databases/$(database)/documents/logPermissions/$(uid() + '_' + dateStr)).data.targetUid == uid()
+        && get(/databases/$(database)/documents/logPermissions/$(uid() + '_' + dateStr)).data.date == dateStr;
     }
 
-    function isLogTutucuForMeetingDate() {
-      return isSignedIn() && (
-        isLogTutucuForDate(request.resource.data.date) ||
-        isLogTutucuForDate(resource.data.date)
-      );
+    function isLogTutucuForMeeting(meetingId) {
+      return isSignedIn()
+        && meetingId is string
+        && exists(/databases/$(database)/documents/meetings/$(meetingId))
+        && isLogTutucuForDate(
+          get(/databases/$(database)/documents/meetings/$(meetingId)).data.date
+        );
     }
 
     function isValidNews(data) {
