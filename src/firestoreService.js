@@ -1,5 +1,5 @@
 import {
-  db, auth,
+  db, auth, firebaseConfigError,
 } from './firebaseConfig';
 import {
   collection, getDocs, doc, getDoc,
@@ -209,6 +209,7 @@ export const updateUserRoleFS = async (uid, role) => {
  * ========================================================= */
 
 export const signUpFS = async (email, password, name) => {
+  if (firebaseConfigError) throw new Error(firebaseConfigError);
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(cred.user, { displayName: name });
   await setDoc(doc(db, 'users', cred.user.uid), {
@@ -232,8 +233,10 @@ export const signUpFS = async (email, password, name) => {
   return cred.user;
 };
 
-export const signInFS = (email, password) =>
-  signInWithEmailAndPassword(auth, email, password);
+export const signInFS = async (email, password) => {
+  if (firebaseConfigError) throw new Error(firebaseConfigError);
+  return signInWithEmailAndPassword(auth, email, password);
+};
 
 export const signOutFS = () => signOut(auth);
 

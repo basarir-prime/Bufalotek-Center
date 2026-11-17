@@ -69,6 +69,8 @@ npm install
 npm start
 ```
 
+Firebase ayarları eksikse giriş ekranında gerekli `.env` değişkenlerinin adları gösterilir. Gerçek Web App yapılandırmasını Firebase Console → Project Settings → Your apps bölümünden alın; `.env.example` içindeki boş değerleri doldurmadan Firebase işlemleri çalışmaz.
+
 PowerShell'de script çalıştırma politikası engelliyorsa `cmd /c "npm install"` şeklinde çalıştır.
 
 ## Dağıtım

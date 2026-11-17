@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { subscribeAuth, getUserRole } from './firestoreService';
+import { firebaseConfigError } from './firebaseConfig';
 
 const AuthContext = createContext(null);
 
@@ -10,6 +11,12 @@ export const AuthProvider = ({ children }) => {
   const [authError, setAuthError] = useState('');
 
   useEffect(() => {
+    if (firebaseConfigError) {
+      setAuthError(firebaseConfigError);
+      setLoading(false);
+      return undefined;
+    }
+
     const unsub = subscribeAuth(async (u) => {
       setLoading(true);
       setAuthError('');
